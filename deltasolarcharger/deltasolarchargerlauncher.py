@@ -89,7 +89,9 @@ class InitialSetupHandler(tornado.web.RequestHandler):
     def write_to_sqlite(initial_setup_payload):
         """ This function writes our initial setup payload into a sqlite file """
 
-        # Todo: put a check here on config folder
+        # Check if we have the folder for the config file
+        if not os.path.exists('/home/pi/deltasolarcharger/config/'):
+            os.mkdir('/home/pi/deltasolarcharger/config')
 
         # Initialize our sqlite DB
         conn = sqlite3.connect('../config/config.sqlite')
@@ -193,7 +195,7 @@ def restart():
     kill_ocpp_backend()
     kill_sc_backend()
     os.system(
-        'lxterminal --working-directory=/home/pi/Desktop/Delta_SC_Advanced/local_OCPP -e sudo python3 ws_server.py &')
+        'lxterminal --working-directory=/home/pi/deltasolarcharger/deltasolarcharger/ocppserver -e sudo python3 ocppserver.py &')
     os.execv(sys.executable, ['python3'] + sys.argv)
 
 
@@ -205,7 +207,7 @@ def kill_ocpp_backend():
         process_command = proc.cmdline()
 
         # Look for the process with our OCPP backend in it and kill it
-        if 'ws_server.py' in process_command:
+        if 'ocppserver.py' in process_command:
             proc.kill()
 
 
@@ -225,13 +227,13 @@ def kill_sc_backend():
         pass
 
 
-# Todo: this needs to change
 def check_latest_version():
     """ This function checks for the latest version number of the software """
 
     with FTP(host=_FTP_HOST) as ftp:
         ftp.login(user=_FTP_USER, passwd=_FTP_PW)
-        directory = "/Delta_SC_Advanced"
+        directory = "/deltasolarcharger/docs"
+
         # We are looking for a specific file - version.txt
         filematch = 'version.txt'
         ftp.cwd(directory)
@@ -242,30 +244,34 @@ def check_latest_version():
             return float(r.getvalue())
 
 
-# Todo: this needs to change
 def download_from_ftp():
     """ This function goes into the FTP server and downloads all of the Python Scripts """
 
     with FTP(host=_FTP_HOST) as ftp:
         ftp.login(user=_FTP_USER, passwd=_FTP_PW)
 
-        # First download all of the smart controller files
-        ftp.cwd("/Delta_SC_Advanced/local_EVCS")
+        # First download deltasolarcharger.py
+        ftp.cwd("/deltasolarcharger/deltasolarcharger/")
+        with open('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarcharger.py', 'wb') as file:
+            ftp.retrbinary('RETR ' + 'deltasolarcharger.py', file.write)
+
+        # Then download all of the files in dschelpers
+        ftp.cwd("/deltasolarcharger/deltasolarcharger/dschelpers")
         for file_name in ftp.nlst('*.py'):
-            with open(file_name, 'wb') as file:
+            with open('/home/pi/deltasolarcharger/deltasolarcharger/dschelpers/' + file_name, 'wb') as file:
                 print('updated ' + file_name)
                 ftp.retrbinary('RETR ' + file_name, file.write)
 
         # Then download the OCPP backend scripts
-        ftp.cwd("/Delta_SC_Advanced/local_OCPP")
-        with open("/home/pi/Desktop/Delta_SC_Advanced/local_OCPP/ws_server.py", 'wb') as file:
-            ftp.retrbinary('RETR ' + 'ws_server.py', file.write)
-        with open("/home/pi/Desktop/Delta_SC_Advanced/local_OCPP/response_database.py", 'wb') as file:
-            ftp.retrbinary('RETR ' + 'ws_server.py', file.write)
+        ftp.cwd("/deltasolarcharger/deltasolarcharger/ocppserver/")
+        with open("/home/pi/deltasolarcharger/deltasolarcharger/ocppserver/ocppserver.py", 'wb') as file:
+            ftp.retrbinary('RETR ' + 'ocppserver.py', file.write)
+        with open("/home/pi/deltasolarcharger/deltasolarcharger/ocppserver/response_database.py", 'wb') as file:
+            ftp.retrbinary('RETR ' + 'response_database.py', file.write)
 
         # Finally, update our software version
-        ftp.cwd("/Delta_SC_Advanced")
-        with open('/home/pi/Desktop/Delta_SC_Advanced/version.txt', 'wb') as file:
+        ftp.cwd("/deltasolarcharger/docs/")
+        with open('/home/pi/deltasolarcharger/docs/version.txt', 'wb') as file:
             ftp.retrbinary('RETR ' + 'version.txt', file.write)
 
     return True
@@ -310,22 +316,32 @@ def check_credentials():
             credential_stage_passed = True
 
 
-# Todo: this needs to change
 def check_program_integrity():
     """ Checks if all of the Python files we need are there """
 
-    solar_charger_file_list = ['main.py', 'firebase_methods.py', 'analyse_methods.py', 'web_analytics_methods.py',
-                               'modbus_methods.py']
+    dschelpers_file_list = ['firebasemethods.py', 'analysemethods.py', 'webanalyticsmethods.py',
+                            'modbusmethods.py', '__init__.py']
 
-    ocpp_file_list = ['ws_server.py', 'response_database.py']
+    ocpp_file_list = ['ocppserver.py', 'response_database.py', '__init__.py']
 
     downloaded_files = False
 
-    # Loop through all of the files that should exist for the program
-    for file in solar_charger_file_list:
+    # First check for deltasolarcharger.py
+    if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarcharger.py'):
+        print('deltasolarcharger.py exists, moving on to dschelpers')
+
+    # If it doesn't exist then I should download the file from the FTP server
+    else:
+        if _ONLINE:
+            print('deltasolarcharger not found, downloading from FTP...')
+            download_success = download_from_ftp()
+            downloaded_files = True
+
+    # Loop through all of the files that should exist for dschelpers
+    for file in dschelpers_file_list:
 
         # If the file exists, then move on to the next file
-        if os.path.exists('/home/pi/Desktop/Delta_SC_Advanced/local_EVCS/' + file):
+        if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/dschelpers/' + file):
             print(file, 'exists. Checking the next file...')
 
         # If the file doesn't exist, we need to download from FTP, break out of the loop and test again
@@ -343,7 +359,7 @@ def check_program_integrity():
     for file in ocpp_file_list:
 
         # If the file exists, then move on to the next file
-        if os.path.exists('/home/pi/Desktop/Delta_SC_Advanced/local_OCPP/' + file):
+        if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/ocppserver/' + file):
             print(file, 'exists. Checking the next file...')
 
         # If the file doesn't exist, we need to download from FTP
@@ -387,12 +403,12 @@ if __name__ == '__main__':
     _ONLINE = check_internet()
 
     # First check if the files we need are here
-    # check_program_integrity()
+    check_program_integrity()
     print('Initial stage passed')
 
     ''' This script starts main.py and ensures that if there are any crashes that the file restarts itself '''
     while True:
-        # check_for_updates()
+        check_for_updates()
 
         print("\nStarting Delta Solar Charger Backend")
         solar_charger_process = subprocess.Popen("sudo python3 deltasolarcharger.py", shell=True, stdin=subprocess.PIPE)

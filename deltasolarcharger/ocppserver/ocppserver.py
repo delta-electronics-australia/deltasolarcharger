@@ -2,7 +2,6 @@
     Written by Benjamin Ong for Delta Electronics in collaboration with the CSIRO """
 import tornado.web
 import tornado.websocket
-import tornado.httpserver
 import tornado.ioloop
 from tornado import gen
 
@@ -13,9 +12,6 @@ from datetime import datetime, timedelta
 from collections import deque
 
 import response_database
-
-import random
-import ast
 
 _DEBUG = False
 
@@ -762,7 +758,7 @@ class UserDataStore:
         self.charger_id = charger_id
         self.charging = False
 
-        self.random_number = random.randint(0, 101)
+        self.random_number = randint(0, 101)
 
 
 class OCPPDataHandler(tornado.websocket.WebSocketHandler):

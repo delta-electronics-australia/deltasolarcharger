@@ -189,10 +189,10 @@ class FirebaseMethods:
         self._LOG = True
 
         # Check if we have the folders logs/ and charging_logs/
-        if not os.path.exists('logs/'):
-            os.mkdir('logs')
-        if not os.path.exists('charging_logs/'):
-            os.mkdir('charging_logs/')
+        if not os.path.exists('../data/logs/'):
+            os.mkdir('../data/logs')
+        if not os.path.exists('../data/charging_logs/'):
+            os.mkdir('../data/charging_logs/')
 
         _LOG_FILE_NAME = datetime.now().strftime('%Y-%m-%d')
         self.log_data(location='../data/logs/' + _LOG_FILE_NAME, purpose='log_inverter_data', initial_run=True)
@@ -462,8 +462,8 @@ class FirebaseMethods:
             if self._LOG:
                 # Check if the folder for the charger exists
                 # Todo: move this so it doens't run every time
-                if not os.path.isdir('charging_logs/' + location.split('/')[1]):
-                    os.makedirs('charging_logs/' + location.split('/')[1])
+                if not os.path.isdir('../data/charging_logs/' + location.split('/')[1]):
+                    os.makedirs('../data/charging_logs/' + location.split('/')[1])
 
                 # First check if there is a file for the log file we are opening
                 if not os.path.isfile(location + '.csv'):
@@ -1231,7 +1231,7 @@ class FirebaseMethods:
         """ This ensures that all of the local csv charging history logs are in the ftp server """
         print('Checking our charging log databse now...')
 
-        local_charging_folder_list = os.listdir('charging_logs/')
+        local_charging_folder_list = os.listdir('../data/charging_logs/')
 
         with FTP(host=self._FTP_HOST) as ftp:
             ftp.login(user=self._FTP_USER, passwd=self._FTP_PW)
@@ -1240,7 +1240,7 @@ class FirebaseMethods:
 
             for charger_folder in local_charging_folder_list:
                 print('Looking at', charger_folder)
-                local_csv_list = os.listdir('charging_logs/' + charger_folder)
+                local_csv_list = os.listdir('../data/charging_logs/' + charger_folder)
 
                 ftp_directory = "/EVCS_portal/logs/" + self.uid + '/charging_logs/' + charger_folder
 
@@ -1256,7 +1256,7 @@ class FirebaseMethods:
                     # Check if our local csv file is in the ftp csv charging log list
                     if filename in ftp_csv_list:
                         filesize_ftp = ftp.size(filename)
-                        filesize_local = os.path.getsize('charging_logs/' + charger_folder + '/' + filename)
+                        filesize_local = os.path.getsize('../data/charging_logs/' + charger_folder + '/' + filename)
                         print('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
 
                         if filesize_ftp != filesize_local:
@@ -1318,7 +1318,7 @@ class FirebaseMethods:
             {datetime.now().strftime("%Y-%m-%d"): True}, self.idToken)
 
         # Get a list of the .csv files in the local directory
-        local_csv_list = os.listdir('logs/')
+        local_csv_list = os.listdir('../data/logs/')
 
         # Download a list of .csv files that exist for the user
         with FTP(host=self._FTP_HOST) as ftp:
@@ -1359,7 +1359,7 @@ class FirebaseMethods:
                         # Get size of ftp csv file for that valid date, compare to size of local csv file.
                         # If they mismatch, upload the local one of that date to the ftp server
                         filesize_ftp = ftp.size(filename)
-                        filesize_local = os.path.getsize('logs/' + filename)
+                        filesize_local = os.path.getsize('../data/logs/' + filename)
                         print('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
                         if filesize_ftp != filesize_local:
                             print('local and ftp are not the same, updating ftp')
