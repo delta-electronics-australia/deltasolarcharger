@@ -41,9 +41,9 @@ def authenticate():
 
     print(uid)
 
-    db = firebase.database()
+    db = firebase.database(timeout_length=2)
 
-    # # Send a package to update DCWB firmware
+# Send a package to update DCWB firmware
     # db.child("users").child(uid).child('evc_inputs').update({
     #     "update_firmware": {
     #         'chargerID': "MEL-DCWB",
@@ -73,14 +73,18 @@ def authenticate():
     #     }
     # })
 
-    # Send a package to send a misc command - LEGIT
-    db.child("users").child(uid).child('evc_inputs').update({
-        "misc_command": {
-            'chargerID': "MEL-ACMP-WIFI",
-            'action': 'TriggerMessage',
-            'misc_data': 'StatusNotification'
-        }
-    })
+    # try:
+    #     # Send a package to send a misc command - LEGIT
+    #     db.child("users").child(uid).child('evc_inputs').update({
+    #         "misc_command": {
+    #             'chargerID': "MEL-ACMP-WIFI",
+    #             'action': 'TriggerMessage',
+    #             'misc_data': 'StatusNotification'
+    #         }
+    #     })
+    # except OSError:
+    #     print('got an OSerror')
+    #     pass
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).update({

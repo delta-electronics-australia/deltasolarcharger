@@ -294,9 +294,9 @@ class WebAnalytics(WebAnalyticsMethods, Process):
 
 
 def main():
-    # with open('version.txt', 'r') as f:
-    #     current_version = float(f.read())
-    #     print('Running software version:', current_version)
+    with open('../docs/version.txt', 'r') as f:
+        current_version = float(f.read())
+        print('Running software version:', current_version)
 
     # Read from stdin and get the data that has been sent from start.py
     stdin_payload = loads(stdin.read())
@@ -351,11 +351,7 @@ def main():
     webanalytics_process.start()
     firebasecommunications_process.start()
     analyse_process.start()
-    # try:
     modbuscommunications_process.run()
-    # except IOError as e:
-    #     print('IOError in main', e)
-    #     modbuscommunications_process.stop()
 
     # Wait for the processes to end if a stop event is raised
     #################
