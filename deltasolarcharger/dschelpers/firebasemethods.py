@@ -7,6 +7,7 @@ import random
 import sqlite3
 import time
 import requests
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from ftplib import FTP, error_perm
 from multiprocessing import Manager
@@ -221,7 +222,7 @@ class FirebaseMethods:
                     self.handle_internet_check()
 
             # (If we are online) Handle all of the data syncing
-            # self.perform_file_integrity_check()
+            # self.perform_file_integrity_check(full_check=False)
 
         print('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
 
@@ -235,11 +236,13 @@ class FirebaseMethods:
                 response = requests.get("http://www.google.com")
                 print("response code: " + str(response.status_code))
 
-                # We must be able to ping google.com 20 times before we are allowed to exit
-                if internet_online_counter == 20:
-                    internet_online = True
+                if response.status_code == 200:
+                    print('internet online counter:', internet_online_counter)
+                    # We must be able to ping google.com 20 times before we are allowed to exit
+                    if internet_online_counter == 20:
+                        internet_online = True
 
-                internet_online_counter += 1
+                    internet_online_counter += 1
 
             except requests.ConnectionError:
                 print("Could not connect to the internet, trying again 3 seconds...")
@@ -248,16 +251,14 @@ class FirebaseMethods:
                 time.sleep(2)
 
         # Now that we recovered, we must synchronise charger statuses and perform file integrity check
-        # Todo: reenable this
-        # self.perform_file_integrity_check()
+        # self.perform_file_integrity_check(full_check=False)
         self.synchronise_charger_status()
         # Todo: this is not working for some reason
-        # self.refresh_tokens()
+        self.refresh_tokens()
+        print('We are OUT of internet_checker thread. Laters')
 
     def handle_internet_check(self):
         """ This function checks if we have a internet checker active. If we don't then make one """
-
-        print(self.internet_checker_thread)
 
         if self.internet_checker_thread is None or not self.internet_checker_thread.isAlive():
             print('Internet checker thread is None, lets start one!')
@@ -266,7 +267,7 @@ class FirebaseMethods:
             self.internet_checker_thread.daemon = True
             self.internet_checker_thread.start()
 
-        print('handled internet check')
+        print('Handled internet check')
 
     @staticmethod
     def condition_data(modbus_data):
@@ -584,7 +585,6 @@ class FirebaseMethods:
 
             return authentication_success
 
-    # Todo: probably don't need to put try clauses in here as it runs right after launcher
     def initialize_firebase_db_values(self):
         """ This method makes sure that all of the values that we are streaming for exist at start up """
 
@@ -641,40 +641,42 @@ class FirebaseMethods:
 
         # First close existing listeners
         try:
-            # print('our listeners before closing:', self.charging_modes_listener)
+            print('our listeners before closing:', self.charging_modes_listener.sse.running)
             self.charging_modes_listener.close()
-            # print('charging mode listener successfully closed')
-            # print('our listeners after closing:', self.charging_modes_listener)
+            print('charging mode listener successfully closed')
+            print('our listeners after closing:', self.charging_modes_listener.sse.running)
         except AttributeError as e:
             print(e, 'but continue in refresh_tokens 2')
 
         try:
-            # print('our listeners before closing:', self.buffer_aggressiveness_listener)
+            print('our listeners before closing:', self.buffer_aggressiveness_listener)
             self.buffer_aggressiveness_listener.close()
-            # print('our listeners after closing:', self.buffer_aggressiveness_listener)
+            print('our listeners after closing:', self.buffer_aggressiveness_listener)
         except AttributeError as e:
             print(e)
         try:
-            # print('our listeners before closing:', self.update_firmware_listener)
+            print('our listeners before closing:', self.update_firmware_listener)
             self.update_firmware_listener.close()
-            # print('our listeners after closing:', self.update_firmware_listener)
+            print('our listeners after closing:', self.update_firmware_listener)
         except AttributeError as e:
             print(e)
         try:
-            # print('our listeners before closing:', self.manual_control_listener)
+            print('our listeners before closing:', self.manual_control_listener)
             self.manual_control_listener.close()
-            # print('our listeners after closing:', self.manual_control_listener)
+            print('our listeners after closing:', self.manual_control_listener)
         except AttributeError as e:
             print(e)
         try:
-            # print('our listeners before closing:', self.misc_listener)
+            print('our listeners before closing:', self.misc_listener)
             self.misc_listener.close()
-            # print('our listeners after closing:', self.misc_listener)
+            print('our listeners after closing:', self.misc_listener)
         except AttributeError as e:
             print(e)
 
         # Refresh token
+        print('before refresh')
         user = self.auth.refresh(self.refreshToken)
+        print('after refresh')
         idToken = user['idToken']
         self.refreshToken = user['refreshToken']
 
@@ -683,7 +685,6 @@ class FirebaseMethods:
 
         print('Tokens successfully refreshed')
 
-    # Todo: must close and restart all listeners once we are back online
     def start_firebase_listeners(self):
         """ This method starts all of our Firebase listeners """
 
@@ -1026,6 +1027,7 @@ class FirebaseMethods:
                     self._charger_status_list[temp_chargerID]['charging_timestamp'] = None
                     self._charger_status_list[temp_chargerID]['meterStart'] = None
                     self._charger_status_list[temp_chargerID]['transaction_id'] = None
+                    self._charger_status_list[temp_chargerID]['charge_rate'] = None
 
                 # (Online) Update evc_inputs charging status for that chargerID now that everything is set up
                 if self._ONLINE:
@@ -1060,6 +1062,10 @@ class FirebaseMethods:
                 self.idToken = new[1]
                 # Now that we have a new refreshToken, we need to stop all the current listeners and recreate them
                 self.start_firebase_listeners()
+
+                if self.refresh_timer.isAlive():
+                    print('Timer is still alive, cancel it first')
+                    self.refresh_timer.cancel()
 
                 self.refresh_timer = Timer(2400, self.refresh_tokens)
                 self.refresh_timer.daemon = True
@@ -1334,11 +1340,11 @@ class FirebaseMethods:
             self.db.child("users").child(self.uid).child('analytics').child('charging_history_analytics').child(
                 charger_id).child(charge_date).child(charge_time).remove()
 
-    def perform_file_integrity_check(self):
-        self.handle_charging_database()
-        self.handle_inverter_database()
+    def perform_file_integrity_check(self, full_check=True):
+        self.handle_charging_database(full_check)
+        self.handle_inverter_database(full_check)
 
-    def handle_charging_database(self):
+    def handle_charging_database(self, full_check=True):
         """ This ensures that all of the local csv charging history logs are in the ftp server """
         print('Checking our charging log databse now...')
 
@@ -1350,13 +1356,21 @@ class FirebaseMethods:
             ############################################################################################################
             # First check if the files stored locally are also stored on the FTP server
             ############################################################################################################
-            print('\nChecking if the file stored locally are also stored on the FTP server')
+            print('\nChecking if the file stored locally is also stored on the FTP server')
 
             self.check_and_make_ftp_dir(ftp, "/EVCS_portal/logs/" + self.uid)
 
             for charger_id in local_charging_folder_list:
                 print('Looking at charging sessions for:', charger_id)
                 local_csv_list = os.listdir('../data/charging_logs/' + charger_id)
+
+                # If we are doing a full check, we take our complete local csv list.
+                if full_check:
+                    final_local_csv_list = local_csv_list
+
+                # If we aren't doing a full check, we take 10 of our latest csv files
+                else:
+                    final_local_csv_list = sorted(local_csv_list, reverse=True)[:5]
 
                 ftp_directory = "/EVCS_portal/logs/" + self.uid + '/charging_logs/' + charger_id
 
@@ -1368,7 +1382,7 @@ class FirebaseMethods:
                 ftp_csv_list = ftp.nlst()
 
                 # Loop through the charging sessions stored locally for this charger ID
-                for filename in local_csv_list:
+                for filename in final_local_csv_list:
                     print(filename)
 
                     # Check if our local csv file is in the ftp csv charging log list
@@ -1405,8 +1419,14 @@ class FirebaseMethods:
 
                 ftp_csv_list = ftp.nlst()
 
-                # Loop through all of the files in the ftp server
-                for filename in ftp_csv_list:
+                if full_check:
+                    final_ftp_csv_list = ftp_csv_list
+
+                else:
+                    final_ftp_csv_list = sorted(ftp_csv_list, reverse=True)[:5]
+
+                # Loop through the files in the ftp server
+                for filename in final_ftp_csv_list:
                     if filename not in local_csv_list:
                         ftp.delete(filename)
                         print('Deleted', filename, 'from ftp as it was not on the local device')
@@ -1424,10 +1444,17 @@ class FirebaseMethods:
                     firebase_charging_history_keys_payload = {}
                     print('No payload for this charger ID', e)
 
+                if full_check:
+                    final_firebase_charging_history_keys_payload = firebase_charging_history_keys_payload
+                else:
+                    final_firebase_charging_history_keys_payload = self.db.child("users").child(self.uid).child(
+                        "charging_history_keys").child(charger_id).order_by_key().limit_to_last(5).get(
+                        self.idToken).val()
+
                 # If a payload exists then we can go through the dates and extract the individual charging times
-                if firebase_charging_history_keys_payload:
-                    for date in firebase_charging_history_keys_payload:
-                        for charging_time in list(firebase_charging_history_keys_payload[date].keys()):
+                if final_firebase_charging_history_keys_payload:
+                    for date in final_firebase_charging_history_keys_payload:
+                        for charging_time in list(final_firebase_charging_history_keys_payload[date].keys()):
 
                             # Define the csv name that we will be looking for in the local folder
                             firebase_csv_name = date + ' ' + charging_time + '.csv'
@@ -1454,7 +1481,7 @@ class FirebaseMethods:
                 print('\nNow checking if charging history keys contains all of the charging sessions stored locally')
 
                 # Loop through all of the charging sessions stored locally for this charger ID
-                for filename in local_csv_list:
+                for filename in final_local_csv_list:
                     print('Checking if', filename, 'exists in charging history keys')
 
                     # Split out filename into charging date and charging time
@@ -1481,9 +1508,9 @@ class FirebaseMethods:
                 # Now make sure that Firebase charging_history_analytics contains analytics for every session in keys
                 ########################################################################################################
 
-    def handle_inverter_database(self):
-        """ This ensures that all of the local csv files are in the ftp server """
-        print('Checking our inverter_logs database now...')
+    def handle_inverter_database(self, full_check=True):
+        """ This ensures that all of the local csv files are in the FTP server """
+        print('\nChecking our inverter_logs database now...')
 
         # Post the current date to history_keys
         self.db.child("users").child(self.uid).child("history_keys").update(
@@ -1499,7 +1526,7 @@ class FirebaseMethods:
         sorted_local_csv_list = sorted(local_csv_list, reverse=True)
 
         # Loop through the last 3 days
-        for filename in sorted_local_csv_list[:3]:
+        for filename in sorted_local_csv_list[:2]:
 
             # Open the file and count the number of rows in each file
             with open('../data/logs/' + filename) as f:
@@ -1526,28 +1553,18 @@ class FirebaseMethods:
             self.check_and_make_ftp_dir(ftp, "/EVCS_portal/logs/" + self.uid)
             self.check_and_make_ftp_dir(ftp, ftp_directory)
 
-            # _directory_check_passed = False
-            # while _directory_check_passed is False:
-            #     try:
-            #         ftp.cwd("/EVCS_portal/logs/" + self.uid)
-            #         _directory_check_passed = True
-            #     except error_perm as e:
-            #         print('oops, doesnt exist: ', e)
-            #         ftp.mkd(ftp_directory)
-            #
-            # _directory_check_passed = False
-            # while _directory_check_passed is False:
-            #     try:
-            #         ftp.cwd(ftp_directory)
-            #         _directory_check_passed = True
-            #     except error_perm as e:
-            #         print('oops, doesnt exist: ', e)
-            #         ftp.mkd(ftp_directory)
-
             # This generates a list with all of the csv files in the user's log folder
             ftp_csv_list = ftp.nlst()
 
-            for filename in local_csv_list:
+            # If we are doing a full check, we take our complete local csv list.
+            if full_check:
+                final_local_csv_list = local_csv_list
+
+            # If we aren't doing a full check, we take 10 of our latest csv files
+            else:
+                final_local_csv_list = sorted(local_csv_list, reverse=True)[:5]
+
+            for filename in final_local_csv_list:
                 # If the looped date is NOT today
                 if filename.split('.')[0] != datetime.now().strftime("%Y-%m-%d"):
                     print(filename, 'is a valid date. Checking integrity of csv on our server...')
@@ -1578,8 +1595,16 @@ class FirebaseMethods:
             ############################################################################################################
             ftp_csv_list = ftp.nlst()
 
+            if full_check:
+                final_ftp_csv_list = ftp_csv_list
+
+            else:
+                final_ftp_csv_list = sorted(ftp_csv_list, reverse=True)[:5]
+
             # So loop through all of the files in the ftp server
-            for filename in ftp_csv_list:
+            for filename in final_ftp_csv_list:
+
+                # If the file in the ftp server is not in the complete local csv list, then we can delete it from FTP
                 if filename not in local_csv_list:
                     ftp.delete(filename)
                     print('Deleted', filename, 'from ftp as it was not on the local device')
@@ -1589,19 +1614,24 @@ class FirebaseMethods:
         ################################################################################################################
         try:
             firebase_csv_list = list(
-                self.db.child("users").child(self.uid).child("history_keys").get(
-                    self.idToken).val().keys())
+                self.db.child("users").child(self.uid).child("history_keys").get(self.idToken).val().keys())
+
         except AttributeError as e:
             firebase_csv_list = []
             print('None detected!', e)
 
-        print('local csv list: ', local_csv_list)
-        print('firebase csv list: ', firebase_csv_list)
+        # If we are doing a full check then we get all history_keys
+        if full_check:
+            final_firebase_csv_list = firebase_csv_list
+
+        # If we aren't doing a full check then we only get the last ten history_keys
+        else:
+            final_firebase_csv_list = sorted(firebase_csv_list, reverse=True)[:5]
 
         ################################################################################################################
         # Remove all entries in Firebase that are not in the local directory and do not belong to today
         ################################################################################################################
-        for firebase_csv_name in firebase_csv_list:
+        for firebase_csv_name in final_firebase_csv_list:
             print('Checking:', firebase_csv_name, 'from Firebase')
             if (firebase_csv_name + '.csv' not in local_csv_list) and firebase_csv_name != datetime.now().strftime(
                     "%Y-%m-%d"):
@@ -1611,7 +1641,7 @@ class FirebaseMethods:
         ################################################################################################################
         # Go through all of the csv files in our local folder and check if there is an entry in Firebase
         ################################################################################################################
-        for filename in local_csv_list:
+        for filename in final_local_csv_list:
             shortened_filename = filename.split('.')[0]
             if shortened_filename not in firebase_csv_list:
                 print(shortened_filename, 'is not in', firebase_csv_list, 'lets upload it')

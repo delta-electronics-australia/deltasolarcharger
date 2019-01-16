@@ -154,7 +154,6 @@ def configure_3g_settings():
 
         time.sleep(1)
 
-    # Todo: check this
     global _LIMIT_DATA
     _LIMIT_DATA = True
 
@@ -168,8 +167,12 @@ def check_internet():
     for row in sql_db.execute("SELECT key, value FROM unnamed"):
         firebase_cred.update({row[0]: row[1]})
 
+    # If the user has selected connectionMethod as 'none' then we simply set internet status to False
+    if firebase_cred['connectionMethod'] == 'none':
+        internet_status = False
+
     # Check if the system is set for a 3G connection
-    if 'connectionMethod' in firebase_cred and firebase_cred["connectionMethod"] == "3G":
+    elif 'connectionMethod' in firebase_cred and firebase_cred["connectionMethod"] == "3G":
         # Then we need to configure some 3G settings - writing to IP tables so chargers can have internet
         configure_3g_settings()
 

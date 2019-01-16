@@ -468,6 +468,18 @@ class AnalyseMethods:
                 # ********************** INVERTER STATUS AND BATTERY SOC CHECK AND ADJUSTMENTS *************************
                 # ******************************************************************************************************
 
+                # # Todo: define the three variables in here in __init__. Verify data['btsoc']
+                # if not self._BTSOC_THROTTLED and data['btsoc'] < self._BTSOC_LOWER_LIMIT:
+                #     print('We have reached', data['btsoc'], 'SOC, time to throttle')
+                #     self._BTSOC_THROTTLED = True
+                #
+                # elif self._BTSOC_THROTTLED and data['btsoc'] > self._BTSOC_UPPER_LIMIT:
+                #     print('We have reached', data['btsoc'], 'SOC, time to stop throttling')
+                #     self._BTSOC_THROTTLED = False
+                #
+                # if self._BTSOC_THROTTLED:
+                #     self.
+
                 # Todo: we need to add hysteresis into this
                 # At this stage we have a charge rate ready to go. But first we check inverter status and battery SOC
                 if inverter_status == "Stand Alone":

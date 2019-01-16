@@ -3,6 +3,8 @@ import time
 from datetime import datetime
 from threading import Timer
 
+from collections import OrderedDict
+
 
 # db = None
 # uid = None
@@ -62,23 +64,23 @@ def authenticate():
     #     }
     # })
 
-    # # Send a package to send a misc command
-    # db.child("users").child(uid).child('evc_inputs').update({
-    #     "misc_command": {
-    #         'chargerID': "MEL-ACMP",
-    #         'action': 'GetConfiguration',
-    #         # 'action': 'ChangeConfiguration',
-    #         'misc_data': {'key': ['AuthorizationRequired', 'NonAuthorizedTag', 'OfflinePolicy', 'ClockAlignedDataInterval']},
-    #         # 'misc_data': {"key": "OfflinePolicy", "value": '0'}
-    #     }
-    # })
+    # Send a package to send a misc command
+    db.child("users").child(uid).child('evc_inputs').update({
+        "misc_command": {
+            'chargerID': "MEL-ACMP-WIFI2",
+            # 'action': 'GetConfiguration',
+            'action': 'ChangeConfiguration',
+            # 'misc_data': {'key': ['AuthorizationRequired', 'NonAuthorizedTag', 'OfflinePolicy', 'ClockAlignedDataInterval']},
+            'misc_data': {"key": "AuthorizationRequired", "value": "false"}
+        }
+    })
 
     # try:
     #     # Send a package to send a misc command - LEGIT
     #     db.child("users").child(uid).child('evc_inputs').update({
     #         "misc_command": {
     #             'chargerID': "MEL-ACMP-WIFI",
-    #             'action': 'TriggerMessage',
+    #             'action': 'RemoteStartTransaction',
     #             'misc_data': 'StatusNotification'
     #         }
     #     })
