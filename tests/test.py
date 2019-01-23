@@ -64,29 +64,29 @@ def authenticate():
     #     }
     # })
 
-    # Send a package to send a misc command
-    db.child("users").child(uid).child('evc_inputs').update({
-        "misc_command": {
-            'chargerID': "MEL-ACMP-WIFI2",
-            # 'action': 'GetConfiguration',
-            'action': 'ChangeConfiguration',
-            # 'misc_data': {'key': ['AuthorizationRequired', 'NonAuthorizedTag', 'OfflinePolicy', 'ClockAlignedDataInterval']},
-            'misc_data': {"key": "AuthorizationRequired", "value": "false"}
-        }
-    })
+    # # Send a package to send a misc command
+    # db.child("users").child(uid).child('evc_inputs').update({
+    #     "misc_command": {
+    #         'chargerID': "MEL-ACMP-WIFI",
+    #         # 'action': 'GetConfiguration',
+    #         'action': 'ChangeConfiguration',
+    #         # 'misc_data': {'key': ['AuthorizationRequired', 'NonAuthorizedTag', 'OfflinePolicy', 'ClockAlignedDataInterval']},
+    #         'misc_data': {"key": "MeterValueSampleInterval", "value": "5"}
+    #     }
+    # })
 
-    # try:
-    #     # Send a package to send a misc command - LEGIT
-    #     db.child("users").child(uid).child('evc_inputs').update({
-    #         "misc_command": {
-    #             'chargerID': "MEL-ACMP-WIFI",
-    #             'action': 'RemoteStartTransaction',
-    #             'misc_data': 'StatusNotification'
-    #         }
-    #     })
-    # except OSError:
-    #     print('got an OSerror')
-    #     pass
+    try:
+        # Send a package to send a misc command - LEGIT
+        db.child("users").child(uid).child('evc_inputs').update({
+            "misc_command": {
+                'chargerID': "MEL-ACMP-WIFI",
+                'action': 'RemoteStartTransaction',
+                'misc_data': 'StatusNotification'
+            }
+        })
+    except OSError:
+        print('got an OSerror')
+        pass
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).update({

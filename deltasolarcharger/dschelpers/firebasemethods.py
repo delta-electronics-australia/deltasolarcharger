@@ -18,6 +18,43 @@ import pyrebase
 import websocket
 
 
+class SoftwareUpdateNotifier(Thread):
+    def __init__(self, url):
+        self.url = url
+        self.ws = None
+        super().__init__()
+
+    def run(self):
+        self.ws = websocket.WebSocketApp(self.url, on_message=self.on_message, on_error=self.on_error,
+                                         on_close=self.on_close)
+        self.ws.on_open = self.on_open
+        self.ws.run_forever()
+
+    def on_message(self, message):
+        received_message = json.loads(message)
+        print(received_message)
+
+    def on_error(self, error):
+        print(error)
+
+    def on_open(self, message):
+        print(message)
+
+    def on_close(self, message):
+        print(message)
+
+    def send(self, data):
+        try:
+            self.ws.send(data)
+        except BrokenPipeError as e:
+            print(e)
+            pass
+
+        except websocket.WebSocketConnectionClosedException as e:
+            print(e)
+            pass
+
+
 class OCPPWebsocketReceiver(Thread):
     def __init__(self, url, information_bus, charger_status_information_bus, ws_receiver_stopped_event):
         self.url = url
@@ -142,7 +179,7 @@ class FirebaseMethods:
         self.charging_modes_listener = None
         self.buffer_aggressiveness_listener = None
         self.update_firmware_listener = None
-        self.manual_control_listener = None
+        self.dsc_firmware_update_listener = None
         self.misc_listener = None
 
         # Define our update_firebase flags
@@ -150,7 +187,12 @@ class FirebaseMethods:
         self.webanalytics_counter = 0
         self.log_counter = 0
 
+        # Define a variable to save our MODBUS data
         self.latest_modbus_data = dict()
+        self.latest_firebase_data = dict()
+
+        # Define the current selected charging mode (should be the same as analyzemethods variable)
+        self._CHARGING_MODE = 'PV_with_BT'
 
         # Depending on whether or not we want to limit our data usage, we set our max counters
         if self._LIMIT_DATA:
@@ -224,10 +266,18 @@ class FirebaseMethods:
             # (If we are online) Handle all of the data syncing
             # self.perform_file_integrity_check(full_check=False)
 
+            # Define our update software notifier
+            self.software_update_ws = SoftwareUpdateNotifier("ws://127.0.0.1:5000/delta_solar_charger_software_update")
+            self.software_update_ws.name = 'SOFTWAREUPDATEWS'
+            self.software_update_ws.daemon = True
+            self.software_update_ws.start()
+
         print('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
 
     def internet_checker(self):
         """ internet_checker will keep pinging Google until the internet comes back online """
+
+        print('\nWe have entered the internet checker\n')
 
         internet_online_counter = 0
         internet_online = False
@@ -238,6 +288,7 @@ class FirebaseMethods:
 
                 if response.status_code == 200:
                     print('internet online counter:', internet_online_counter)
+
                     # We must be able to ping google.com 20 times before we are allowed to exit
                     if internet_online_counter == 20:
                         internet_online = True
@@ -251,11 +302,11 @@ class FirebaseMethods:
                 time.sleep(2)
 
         # Now that we recovered, we must synchronise charger statuses and perform file integrity check
-        # self.perform_file_integrity_check(full_check=False)
         self.synchronise_charger_status()
-        # Todo: this is not working for some reason
         self.refresh_tokens()
-        print('We are OUT of internet_checker thread. Laters')
+        self.perform_file_integrity_check(full_check=False)
+
+        print('\nWe are OUT of internet_checker thread\n')
 
     def handle_internet_check(self):
         """ This function checks if we have a internet checker active. If we don't then make one """
@@ -338,6 +389,7 @@ class FirebaseMethods:
             'Operation Mode': {'value': inverter_data_temp['inverter_op_mode'],
                                # 'name': 'Operation Mode'
                                },
+            'Inverter Status': {'value': inverter_data_temp['inverter_status']},
             'DSP FW': {'value': inverter_data_temp['fw_dsp'],
                        },
             'RED FW': {'value': inverter_data_temp['fw_red'],
@@ -641,35 +693,35 @@ class FirebaseMethods:
 
         # First close existing listeners
         try:
-            print('our listeners before closing:', self.charging_modes_listener.sse.running)
+            print('charging mode listener before closing:', self.charging_modes_listener.sse.running)
             self.charging_modes_listener.close()
             print('charging mode listener successfully closed')
-            print('our listeners after closing:', self.charging_modes_listener.sse.running)
+            print('charging mode listener after closing:', self.charging_modes_listener.sse.running)
         except AttributeError as e:
             print(e, 'but continue in refresh_tokens 2')
 
         try:
-            print('our listeners before closing:', self.buffer_aggressiveness_listener)
+            print('buffer listener before closing:', self.buffer_aggressiveness_listener)
             self.buffer_aggressiveness_listener.close()
-            print('our listeners after closing:', self.buffer_aggressiveness_listener)
+            print('buffer listener after closing:', self.buffer_aggressiveness_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('our listeners before closing:', self.update_firmware_listener)
+            print('firmware listener before closing:', self.update_firmware_listener)
             self.update_firmware_listener.close()
-            print('our listeners after closing:', self.update_firmware_listener)
+            print('firmware listener after closing:', self.update_firmware_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('our listeners before closing:', self.manual_control_listener)
-            self.manual_control_listener.close()
-            print('our listeners after closing:', self.manual_control_listener)
+            print('manual control listener before closing:', self.dsc_firmware_update_listener)
+            self.dsc_firmware_update_listener.close()
+            print('manual control listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('our listeners before closing:', self.misc_listener)
+            print('misc listener before closing:', self.misc_listener)
             self.misc_listener.close()
-            print('our listeners after closing:', self.misc_listener)
+            print('misc listener after closing:', self.misc_listener)
         except AttributeError as e:
             print(e)
 
@@ -703,10 +755,10 @@ class FirebaseMethods:
             'evc_inputs/update_firmware').stream(stream_handler=self.firebase_stream_handler, token=self.idToken,
                                                  stream_id="update_firmware_request")
 
-        self.manual_control_listener = self.db.child("users").child(self.uid).child(
-            'evc_inputs/manual_charge_control').stream(stream_handler=self.firebase_stream_handler,
-                                                       token=self.idToken,
-                                                       stream_id="manual_charge_control")
+        self.dsc_firmware_update_listener = self.db.child("users").child(self.uid).child(
+            'evc_inputs/dsc_firmware_update').stream(stream_handler=self.firebase_stream_handler,
+                                                     token=self.idToken,
+                                                     stream_id="dsc_firmware_update")
 
         self.misc_listener = self.db.child("users").child(self.uid).child('evc_inputs/misc_command').stream(
             stream_handler=self.firebase_stream_handler, token=self.idToken, stream_id="misc_command")
@@ -722,6 +774,16 @@ class FirebaseMethods:
             # If path is '/' then we know it is initial run or both has been modified
             if message['path'] == '/':
                 if 'single_charging_mode' in message['data']:
+                    # # If mode changed to MAX_CHARGE_GRID and we are in standalone mode, we have to reverse the change
+                    # if message['data']['single_charging_mode'] == "MAX_CHARGE_GRID" and \
+                    #         self.latest_firebase_data['inverter_data']['inverter_status'] == "STANDALONE":
+                    #     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes/').update({
+                    #         'single_charging_mode': self._CHARGING_MODE
+                    #     })
+                    #
+                    # # In all other scenarios, just run as normal
+                    # else:
+                    self._CHARGING_MODE = message['data']['single_charging_mode']
                     self.firebase_to_analyse_queue.put(
                         {'purpose': 'change_single_charging_mode',
                          'charge_mode': message['data']['single_charging_mode']})
@@ -736,6 +798,17 @@ class FirebaseMethods:
                         pass
 
             elif message['path'] == "/single_charging_mode":
+
+                # # If mode changed to MAX_CHARGE_GRID and we are in standalone mode, we have to reverse the change
+                # if message['data'] == "MAX_CHARGE_GRID" and self.latest_firebase_data[
+                #     'inverter_status'] == "STANDALONE":
+                #     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes/').update({
+                #         'single_charging_mode': self._CHARGING_MODE
+                #     })
+                #
+                # # In all other scenarios, just run as normal
+                # else:
+                self._CHARGING_MODE = message['data']
                 self.firebase_to_analyse_queue.put(
                     {'purpose': 'change_single_charging_mode', 'charge_mode': message['data']})
 
@@ -754,20 +827,14 @@ class FirebaseMethods:
         elif message['stream_id'] == "update_firmware_request":
             self.information_bus.put(('update_firmware', message['data']))
 
-        # Todo: need to test manual charge control
-        # These stream handlers are for manual charge rate control
-        elif message['stream_id'] == "manual_charge_control" and message['data']:
-            # Only send a charge rate if manual charge control is turned on
-            if self._MANUAL_CHARGE_CONTROL:
-                try:
-                    unique_id = random.randint(0, 1000)
-                    # print('Identifier:', unique_id)
-                    self.ocpp_ws.send(json.dumps(
-                        {'uniqueID': unique_id, 'chargerID': message['data']['chargerID'], 'purpose': 'charge_rate',
-                         'charge_rate': message['data']['charge_rate']}))
-                except ConnectionRefusedError as e:
-                    print(e, 'got a connection refused error')
-                    pass
+        elif message['stream_id'] == "dsc_firmware_update" and message['data']:
+            print('hello')
+
+            # First delete the entry
+            self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove()
+
+            # Send the message to the launcher
+            # self.software_update_ws.send(json.dumps({'dsc_firmware_update': message['data']}))
 
         elif message['stream_id'] == "misc_command" and message['data']:
             self.information_bus.put(('misc_command', message['data']))
@@ -1244,7 +1311,6 @@ class FirebaseMethods:
                     print('charger ID does not exist in charger list yet', e)
 
             elif new[0] == "update_firmware":
-                # new[1] == {'set': true/false, 'chargerID': chargerID, 'firmwareType': gfd}
                 data = new[1]
 
                 # If we got a firmware update request with a "True" value of set
@@ -1667,7 +1733,7 @@ class FirebaseMethods:
         # (If we're online) If the day is different, then we need to run special code to fix our database up
         day = datetime.now().day
         if self._ONLINE and day != self.today:
-            csv_thread = Thread(target=self.handle_inverter_database)
+            csv_thread = Thread(target=self.perform_file_integrity_check, args=(False,))
             csv_thread.daemon = True
             csv_thread.start()
 
@@ -1686,6 +1752,7 @@ class FirebaseMethods:
             (firebase_ready_data, history_ready_data) = self.condition_data(payload)
 
             self.latest_modbus_data = history_ready_data
+            self.latest_firebase_data = firebase_ready_data
 
             # We log everytime log_counter reaches log_counter_max
             if self.log_counter == self.log_counter_max:

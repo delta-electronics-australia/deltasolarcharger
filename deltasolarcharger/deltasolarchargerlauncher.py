@@ -16,9 +16,10 @@ import sqlite3
 
 import asyncio
 import tornado.web
+import tornado.websocket
 import tornado.ioloop
 from tornado.escape import json_decode
-from json import dumps
+from json import dumps, loads
 
 # Define our FTP parameters
 _FTP_HOST = "203.32.104.46"
@@ -45,14 +46,18 @@ class ConfigServer(tornado.web.Application):
         tornado.ioloop.IOLoop.instance().start()
 
 
-class SoftwareUpdateHandler(tornado.web.RequestHandler):
+class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):
 
-    def get(self):
-        print('hello!')
+    def open(self):
+        print('SoftwareUpdateHandler open!')
 
-    def post(self):
-        print('post!')
-        restart()
+    def on_message(self, message):
+        print('Received a message for software update!', message)
+
+        decoded_message = loads(message)
+        if decoded_message['dsc_firmware_update']:
+            print('doing an update now!')
+            pass
 
 
 class InitialSetupHandler(tornado.web.RequestHandler):
@@ -66,24 +71,37 @@ class InitialSetupHandler(tornado.web.RequestHandler):
 
         print('We got an initial setup message!', initial_setup_payload)
 
-        # Todo: we need to return some kind of success variable that determines our response
-        self.handle_initial_setup(initial_setup_payload)
+        return_message = self.handle_initial_setup(initial_setup_payload)
 
-        response = dumps({'success': True})
+        # Now that we have handled the initial setup, we send the result back to the app
+        response = dumps({'success': return_message})
         self.write(response)
+
+        # If our return message is True, then that means it was a success
+        if return_message is True:
+            print('We have officially completed initial setup. Lets kill proceses now...')
+            # Now kill all solar charger processes that are running
+            kill_sc_backend()
+
+        # If a configuration file already exists, then we need to tell the app that we cannot initialize the DSC
+        elif return_message == "config exists":
+            print('Config file already exists, sending a fail')
+            pass
 
     def handle_initial_setup(self, initial_setup_payload):
         """ This functions all of the initial setup """
 
         print('Initial setup payload is:', initial_setup_payload)
 
-        # Write our payload into an sqlite DB file
-        self.write_to_sqlite(initial_setup_payload)
+        # See if a config file already exists
+        if os.path.exists('/home/pi/deltasolarcharger/config/config.sqlite'):
+            # Then we reject the initial setup
+            return "config exists"
+        else:
 
-        print('We have officially completed initial setup. Lets kill proceses now...')
-
-        # Now kill all solar charger processes that are running
-        kill_sc_backend()
+            # Write our payload into an sqlite DB file
+            self.write_to_sqlite(initial_setup_payload)
+            return True
 
     @staticmethod
     def write_to_sqlite(initial_setup_payload):
@@ -169,7 +187,7 @@ def check_internet():
 
     # If the user has selected connectionMethod as 'none' then we simply set internet status to False
     if firebase_cred['connectionMethod'] == 'none':
-        internet_status = False
+        return False
 
     # Check if the system is set for a 3G connection
     elif 'connectionMethod' in firebase_cred and firebase_cred["connectionMethod"] == "3G":
