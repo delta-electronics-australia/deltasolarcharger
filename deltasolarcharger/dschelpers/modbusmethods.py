@@ -7,10 +7,11 @@ from datetime import datetime
 
 
 class ModbusMethods:
-
-    def __init__(self):
+    def __init__(self, analyse_to_modbus_queue):
         self.E5 = None
         self.DPM = None
+
+        self.analyse_to_modbus_queue = analyse_to_modbus_queue
 
         self.initiate_parameters(1, 5)
 
@@ -113,6 +114,19 @@ class ModbusMethods:
             return "STAND_ALONE_MODE"
 
     def get_modbus_data(self):
+        # Check for any inputs from analyse methods
+        if not self.analyse_to_modbus_queue.empty():
+            new_payload = self.analyse_to_modbus_queue.get()
+            purpose = new_payload['purpose']
+
+            if purpose == "inverter_op_mode":
+                if new_payload['inverter_op_mode'] == "CHARGE_FIRST_MODE":
+                    self.E5.write_register(25626, 4, 0, 6, False)
+                    print('Changed mode to Charge First Mode!')
+                elif new_payload['inverter_op_mode'] == "SELF_CONSUMPTION_MODE_INTERNAL":
+                    self.E5.write_register(25626, 1, 0, 6, False)
+                    print('Changed mode to Self Consumption Mode!')
+
         # Grab all inverter_cont_data
         inverter_data = dict()
         # Write 0 to holding register 800 to read AC1 info

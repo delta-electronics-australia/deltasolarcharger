@@ -37,13 +37,24 @@ class ConfigServer(tornado.web.Application):
 
     def __init__(self):
         handlers = [(r"/delta_solar_charger_initial_setup", InitialSetupHandler),
-                    (r"/delta_solar_charger_software_update", SoftwareUpdateHandler)]
+                    (r"/delta_solar_charger_software_update", SoftwareUpdateHandler),
+                    (r"/delta_solar_charger_factory_reset", FactoryResetHandler)]
         settings = {'debug': True}
         super().__init__(handlers, **settings)
 
     def run(self):
         self.listen(5000)
         tornado.ioloop.IOLoop.instance().start()
+
+
+class FactoryResetHandler(tornado.web.RequestHandler):
+    def post(self):
+        print("Post in factory reset handler!")
+        decoded_message = json_decode(self.request.body)
+
+    def perform_factory_reset(self):
+        # Todo: delete the data folder, remove whole user node in Firebase - need to test if this can be recovered
+        pass
 
 
 class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):

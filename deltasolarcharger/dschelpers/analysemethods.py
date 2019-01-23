@@ -235,6 +235,12 @@ class AnalyseMethods:
 
         return temp_count, active_charger_list
 
+    def check_and_change_inverter_op_mode(self, current_mode, proposed_mode):
+        # Set the inverter mode to standalone mode if it isn't already
+        if current_mode != proposed_mode:
+            self.analyze_to_modbus_queue.put(
+                {'purpose': "inverter_op_mode", "inverter_op_mode": proposed_mode})
+
     def multiple_charger_calculate_max_charge_standalone(self, data, num_active_chargers):
         # ******************************************************************************************************
         # ******************************** FIRST TRACK OUR SOLAR ***********************************************
@@ -324,6 +330,9 @@ class AnalyseMethods:
 
         # If the inverter is in standalone mode
         if data['inverter_status'] == "Stand Alone":
+            # Make sure we are in self consumption mode
+            self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'SELF_CONSUMPTION_MODE_INTERNAL')
+
             # ... and we are BT SOC throttled
             if self._BTSOC_THROTTLED:
                 # Then we need to stop charging immediately
@@ -347,113 +356,37 @@ class AnalyseMethods:
                 else:
                     pass
 
-        # If the inverter is in grid connected mode, we can draw from the grid to make up any needed power
+        # If the inverter is in GRID CONNECTED MODE, we can draw from the grid to make up any needed power
         else:
             # ... and we are BT SOC throttled
             if self._BTSOC_THROTTLED:
-                # Todo: We need to set the charge mode to charge first
+
+                # Todo: Test inverter op mode
                 # Set the inverter mode to charge first so it doesn't use the battery
+                self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'CHARGE_FIRST_MODE')
 
                 # Set charge rate to our minimum charge rate
                 return 6 * num_active_chargers
 
             # ... and we are not BT SOC throttled, we check how much charge is allocated
 
-            # if our throttle adjusted charge rate is greater than our minimum,
+            # If our throttle adjusted charge rate is greater than our minimum,
             elif self._THROTTLE_ADJUSTED_CHARGE_RATE > 6 * num_active_chargers:
-                # then we are all happy
+                # Set the inverter mode to standalone mode if it isn't already
+                self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'SELF_CONSUMPTION_MODE_INTERNAL')
+
+                # Let our throttled adjusted charge rate past
                 return self._THROTTLE_ADJUSTED_CHARGE_RATE
 
-            # but if our throttled adjusted charge rate is LOWER than our minimum
+            # If our throttled adjusted charge rate is LOWER than our minimum
             else:
                 # If we are temperature throttled
                 if self._TEMP_THROTTLED:
-                    # Todo: set the charge mode to charge first
-                    pass
+                    # Set the inverter mode to charge first so it doesn't use the battery
+                    self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'CHARGE_FIRST_MODE')
 
                 # Then we increase the charge rate to our minimum charge rate
                 return 6 * num_active_chargers
-
-    # def multiple_charger_calculate_max_charge_standalone(self, approx_dc_current, data):
-    #     """ This function calculates the final charge rate for maximizing current in standalone mode
-    #      when multiple chargers are connected """
-    #
-    #     # Only use our algorithm when we have more than 2A
-    #     if approx_dc_current > 1:
-    #         # Calculate a new buffer
-    #         z_stats = self.update_dynamic_buffer()
-    #
-    #         # Take the weighted average of the current window
-    #         pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
-    #         # Apply the buffer to the weighted average
-    #         pv_window_mean = pv_window_mean * (1 - self._BUFFER)
-    #
-    #         # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
-    #
-    #         # Define our thresholds
-    #         upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
-    #         lower_threshold = self._CURRENT_CHARGE_RATE * (1 - self.LOWER_THRESHOLD)
-    #
-    #         # print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
-    #
-    #         # Check if our window mean is greater than the upper threshold
-    #         if pv_window_mean > upper_threshold:
-    #             # Increase the charge rate if window mean is greater.
-    #             self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_INCREASE
-    #             # print('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
-    #
-    #         elif pv_window_mean < lower_threshold:
-    #             self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_DECREASE
-    #             # print('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
-    #
-    #         else:
-    #             # print('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
-    #             pass
-    #
-    #         # # Log all the data
-    #         # self.log_data(data, approx_dc_current, pv_window_mean, z_stats)
-    #
-    #         # Todo: this code might not be realistic. Awaiting further testing
-    #         # If we are not throttled and the temperatures go over the limit, then we turn throttle on
-    #         if not self._TEMP_THROTTLED and data['bt_module1_temp_max'] > self._BATTERY_TEMP_LIMIT:
-    #             self._TEMP_THROTTLED = True
-    #
-    #         # If we are throttled and the temperatures go under the cooled off temperature, we turn throttle off
-    #         elif self._TEMP_THROTTLED and data['bt_module1_temp_max'] < self._BATTERY_COOLED_OFF_TEMP:
-    #             self._TEMP_THROTTLED = False
-    #
-    #         if self._TEMP_THROTTLED:
-    #             print('We have reached a high battery temperature, time to throttle')
-    #             self._CURRENT_CHARGE_RATE += self._THROTTLED_BATTERY_CURRENT
-    #             self._CURRENT_CHARGE_RATE = floor(self._CURRENT_CHARGE_RATE)
-    #             # return self._CURRENT_CHARGE_RATE
-    #         else:
-    #             # Now we have finished our PV tracking algorithm, we add the battery current that we have and floor
-    #             self._CURRENT_CHARGE_RATE += self._BATTERY_CHARGE_RATE
-    #             self._CURRENT_CHARGE_RATE = floor(self._CURRENT_CHARGE_RATE)
-    #
-    #             if data['inverter_status'] == "Stand Alone":
-    #                 if self._CURRENT_CHARGE_RATE > self._MAX_STANDALONE_CURRENT:
-    #                     self._CURRENT_CHARGE_RATE = self._MAX_STANDALONE_CURRENT
-    #             else:
-    #                 if self._CURRENT_CHARGE_RATE > self._MAX_GRID_CONNECTED_CURRENT:
-    #                     self._CURRENT_CHARGE_RATE = self._MAX_GRID_CONNECTED_CURRENT
-    #
-    #         final_charge_rate = self._CURRENT_CHARGE_RATE
-    #
-    #     # If we have less than 2A of current, then we keep charging if we are over 10% SOC
-    #     else:
-    #         # Todo: have a look at this. Needs to change
-    #         if data['btsoc'] < 10:
-    #             print('BT SOC is:', data['btsoc'] / 100 < 10, 'stopping')
-    #             return 'stop'
-    #             # # Change to PV_with_BT if below 10% SOC. If not enough solar, it will stop by itself next round
-    #             # self._CHARGING_MODE = 'PV_with_BT'
-    #             # return 'PV_with_BT'
-    #         else:
-    #             final_charge_rate = self._BATTERY_CHARGE_RATE
-    #
-    #     return final_charge_rate
 
     def calculate_charge_rate(self, data):
         """ This method takes all of the data from the inverter and makes a decision on what the charge rate should
@@ -498,6 +431,9 @@ class AnalyseMethods:
                 else:
                     final_charge_rate = self._MAX_GRID_CONNECTED_CURRENT
 
+                # Make sure we are in self consumption mode
+                self.check_and_change_inverter_op_mode(data, 'SELF_CONSUMPTION_MODE_INTERNAL')
+
                 # Split the charge rate evenly between all chargers
                 split_charge_rate = floor(final_charge_rate / num_active_chargers)
 
@@ -512,7 +448,6 @@ class AnalyseMethods:
                 final_charge_rate = self.multiple_charger_calculate_max_charge_standalone(data, num_active_chargers)
                 # final_charge_rate = self._MAX_STANDALONE_CURRENT
 
-                # Todo: need to test this - charging until the battery is below 10% - ALSO CHARGE FOR SINGLE CHARGER
                 # If we do not have a string for the final charge rate then we just split it and go on
                 if final_charge_rate is not str:
                     split_charge_rate = floor(final_charge_rate / num_active_chargers)
@@ -535,6 +470,7 @@ class AnalyseMethods:
         elif num_active_chargers == 1:
             if self._CHARGING_MODE == "MAX_CHARGE_GRID":
                 ''' This mode will use the max current possible - including drawing from grid '''
+                self.check_and_change_inverter_op_mode(inverter_op_mode, 'SELF_CONSUMPTION_MODE_INTERNAL')
 
                 # First make sure that we are in a grid connected mode
                 if inverter_status == "Stand Alone":
@@ -633,6 +569,8 @@ class AnalyseMethods:
 
                 # At this stage we have a charge rate ready to go. But first we check inverter status and battery SOC
                 if inverter_status == "Stand Alone":
+                    self.check_and_change_inverter_op_mode(inverter_op_mode, 'SELF_CONSUMPTION_MODE_INTERNAL')
+
                     # If we are in stand alone mode and we are battery throttled, we need to stop charging ASAP
                     if self._BTSOC_THROTTLED:
                         print('BT SOC is:', data['btsoc'],
@@ -644,20 +582,27 @@ class AnalyseMethods:
                     # If we are in grid connected mode and we are BT SOC throttled then...
                     if self._BTSOC_THROTTLED:
                         # We reduce to 6A charge rate if our solar is only at 7A. Grid will be utilised when BT is 0%
-                        # if self._CURRENT_CHARGE_RATE < 7:
-                        if self._THROTTLE_ADJUSTED_CHARGE_RATE < 7:
+                        if self._CURRENT_CHARGE_RATE < 6:
+                            # Make sure we are in charge first mode
+                            self.check_and_change_inverter_op_mode(inverter_op_mode, 'CHARGE_FIRST_MODE')
+
                             print('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
                                   'and we are in grid connected mode', 'limiting to 6A')
                             self._THROTTLE_ADJUSTED_CHARGE_RATE = 6
 
                         # If our solar is above 7A then we can just charge at that same rate
                         else:
+                            self.check_and_change_inverter_op_mode(inverter_op_mode,
+                                                                   'SELF_CONSUMPTION_MODE_INTERNAL')
+
                             print('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
                                   'and we are in grid connected mode', 'going for solar charging only')
                             self._THROTTLE_ADJUSTED_CHARGE_RATE = floor(self._THROTTLE_ADJUSTED_CHARGE_RATE)
 
                     # If we are NOT BT SOC throttled, then we don't touch the charge rate at all!
-
+                    else:
+                        self.check_and_change_inverter_op_mode(inverter_op_mode,
+                                                               'SELF_CONSUMPTION_MODE_INTERNAL')
                 # ******************************************************************************************************
                 # **************************** MAKE SURE CHARGE RATE IS WITHIN LIMITS **********************************
                 # ******************************************************************************************************
@@ -674,6 +619,8 @@ class AnalyseMethods:
 
             elif self._CHARGING_MODE == "PV_with_BT":
                 ''' This mode will track the solar available using the battery as a fail safe '''
+
+                self.check_and_change_inverter_op_mode(inverter_op_mode, 'SELF_CONSUMPTION_MODE_INTERNAL')
 
                 # If we have at least 1A of solar power then we can run the whole analysis code
                 if approx_dc_current > 1:
@@ -840,7 +787,7 @@ class AnalyseMethods:
             # There are no active chargers, so we just take the charging mode and tell Firebase Methods how much
             # current we have available to start charging
             ############################################################################################################
-            # print("we are in no active chargers")
+            self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'SELF_CONSUMPTION_MODE_INTERNAL')
 
             if self._CHARGING_MODE == "MAX_CHARGE_GRID":
                 available_current = 27

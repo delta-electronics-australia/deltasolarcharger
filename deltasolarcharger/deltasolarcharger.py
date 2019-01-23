@@ -25,7 +25,7 @@ from webanalyticsmethods import WebAnalyticsMethods
 # This process will handle everything to do with Modbus communications
 class ModbusCommunications(ModbusMethods):
     def __init__(self, **kwargs):
-        super().__init__()
+        super().__init__(kwargs['analyse_to_modbus_queue'])
 
         # *****************
         self.kill_counter = 0
@@ -195,16 +195,15 @@ class FirebaseCommunications(FirebaseMethods, Process):
 
 
 # This process will wait and react to anything from Firebase or executes actions
-class Analyse(AnalyseMethods, Process):
+class Analyse(Process):
     def __init__(self, **kwargs):
-        super().__init__(kwargs['firebase_to_analyse_queue'], kwargs['analyze_to_modbus_queue'])
-
-        # # self.analyse contains all of our analysis methods
-        # self.analyse = AnalyseMethods(kwargs['firebase_to_analyse_queue'])
+        super().__init__()
 
         self.modbus_to_analyse_queue = kwargs['modbus_to_analyse_queue']
         self.analyse_to_firebase_queue = kwargs['analyse_to_firebase_queue']
-        self.analyze_to_modbus_queue = kwargs['analyze_to_modbus_queue']
+
+        # # self.analyse contains all of our analysis methods
+        self.analyse = AnalyseMethods(kwargs['firebase_to_analyse_queue'], kwargs['analyse_to_modbus_queue'])
 
         self._webanalytics_event = kwargs['webanalytics_event']
         self._stop_event = kwargs['stop_event']
@@ -229,7 +228,7 @@ class Analyse(AnalyseMethods, Process):
                 # First we get the data from our queue (remember: data is a tuple of dictionaries)
                 modbus_data = self.modbus_to_analyse_queue.get()
 
-                charge_rate = self.make_decision(modbus_data)
+                charge_rate = self.analyse.make_decision(modbus_data)
                 self.analyse_to_firebase_queue.put(charge_rate)
 
         time.sleep(0.10)
