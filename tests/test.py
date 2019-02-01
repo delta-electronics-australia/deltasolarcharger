@@ -57,12 +57,17 @@ def authenticate():
     # # Send a package to update ACMP firmware
     # db.child("users").child(uid).child('evc_inputs').update({
     #     "update_firmware": {
-    #         'chargerID': "MEL-ACMP-WIFI2",
+    #         'chargerID': "MEL-ACMP",
     #         'firmwareType': 'FileSystem',
     #         'set': True,
-    #         'fw_url': 'ftp://203.32.104.46/Delta_FW_FTP/ACMP/beta/v2.09.01/DcoFImage'
+    #         'fw_url': 'ftp://203.32.104.46/Delta_FW_FTP/ACMP/beta/v2.09.02/DcoFImage'
     #     }
     # })
+
+    # Send a package to update ACMP firmware
+    db.child("users").child(uid).child('evc_inputs').update({
+        "delete_charger": "CSIRO1"
+    })
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).child('evc_inputs').update({
@@ -75,18 +80,18 @@ def authenticate():
     #     }
     # })
 
-    try:
-        # Send a package to send a misc command - LEGIT
-        db.child("users").child(uid).child('evc_inputs').update({
-            "misc_command": {
-                'chargerID': "MEL-ACMP-WIFI",
-                'action': 'RemoteStartTransaction',
-                'misc_data': 'StatusNotification'
-            }
-        })
-    except OSError:
-        print('got an OSerror')
-        pass
+    # try:
+    #     # Send a package to send a misc command - LEGIT
+    #     db.child("users").child(uid).child('evc_inputs').update({
+    #         "misc_command": {
+    #             'chargerID': "MEL-ACMP-WIFI",
+    #             'action': 'GetDiagnostics',
+    #             'misc_data': 'StatusNotification'
+    #         }
+    #     })
+    # except OSError:
+    #     print('got an OSerror')
+    #     pass
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).update({

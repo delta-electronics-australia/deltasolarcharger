@@ -48,11 +48,17 @@ class SoftwareUpdateNotifier(Thread):
             self.ws.send(data)
         except BrokenPipeError as e:
             print(e)
-            pass
+            return False
 
         except websocket.WebSocketConnectionClosedException as e:
             print(e)
-            pass
+            return False
+
+        return True
+
+    def stop(self):
+        print('Software Update stop signal received')
+        self.ws.close()
 
 
 class OCPPWebsocketReceiver(Thread):
@@ -180,6 +186,7 @@ class FirebaseMethods:
         self.buffer_aggressiveness_listener = None
         self.update_firmware_listener = None
         self.dsc_firmware_update_listener = None
+        self.delete_charger_listener = None
         self.misc_listener = None
 
         # Define our update_firebase flags
@@ -713,9 +720,15 @@ class FirebaseMethods:
         except AttributeError as e:
             print(e)
         try:
-            print('manual control listener before closing:', self.dsc_firmware_update_listener)
+            print('dsc firmware upgrade listener before closing:', self.dsc_firmware_update_listener)
             self.dsc_firmware_update_listener.close()
-            print('manual control listener after closing:', self.dsc_firmware_update_listener)
+            print('dsc firmware upgrade listener after closing:', self.dsc_firmware_update_listener)
+        except AttributeError as e:
+            print(e)
+        try:
+            print('delete_charger_listener before closing:', self.dsc_firmware_update_listener)
+            self.delete_charger_listener.close()
+            print('delete_charger_listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
             print(e)
         try:
@@ -759,6 +772,11 @@ class FirebaseMethods:
             'evc_inputs/dsc_firmware_update').stream(stream_handler=self.firebase_stream_handler,
                                                      token=self.idToken,
                                                      stream_id="dsc_firmware_update")
+
+        self.delete_charger_listener = self.db.child("users").child(self.uid).child(
+            'evc_inputs/delete_charger').stream(stream_handler=self.firebase_stream_handler,
+                                                token=self.idToken,
+                                                stream_id="delete_charger")
 
         self.misc_listener = self.db.child("users").child(self.uid).child('evc_inputs/misc_command').stream(
             stream_handler=self.firebase_stream_handler, token=self.idToken, stream_id="misc_command")
@@ -827,14 +845,13 @@ class FirebaseMethods:
         elif message['stream_id'] == "update_firmware_request":
             self.information_bus.put(('update_firmware', message['data']))
 
-        elif message['stream_id'] == "dsc_firmware_update" and message['data']:
+        elif message['stream_id'] == "dsc_firmware_update" and message['data'] is not None:
             print('hello')
 
-            # First delete the entry
-            self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove()
+            self.information_bus.put(('dsc_firmware_update', message['data']))
 
-            # Send the message to the launcher
-            # self.software_update_ws.send(json.dumps({'dsc_firmware_update': message['data']}))
+        elif message['stream_id'] == "delete_charger":
+            self.information_bus.put(('delete_charger', message['data']))
 
         elif message['stream_id'] == "misc_command" and message['data']:
             self.information_bus.put(('misc_command', message['data']))
@@ -1145,9 +1162,14 @@ class FirebaseMethods:
 
                 # We need to send them back a message to adjust the MeterValue interval to 10 seconds
                 try:
-                    self.ocpp_ws.send(json.dumps({'chargerID': temp_chargerID, 'purpose': 'misc_command',
-                                                  'action': "ChangeConfiguration",
-                                                  'misc_data': {"key": "MeterValueSampleInterval", "value": "10"}}))
+                    if self._LIMIT_DATA:
+                        self.ocpp_ws.send(json.dumps({'chargerID': temp_chargerID, 'purpose': 'misc_command',
+                                                      'action': "ChangeConfiguration",
+                                                      'misc_data': {"key": "MeterValueSampleInterval", "value": "10"}}))
+                    else:
+                        self.ocpp_ws.send(json.dumps({'chargerID': temp_chargerID, 'purpose': 'misc_command',
+                                                      'action': "ChangeConfiguration",
+                                                      'misc_data': {"key": "MeterValueSampleInterval", "value": "5"}}))
                 except ConnectionRefusedError as e:
                     print(e, 'got a connection refused error')
                     pass
@@ -1342,6 +1364,66 @@ class FirebaseMethods:
                 except OSError:
                     print('Firmware update status notification time out')
                     self.handle_internet_check()
+
+            elif new[0] == "dsc_firmware_update":
+                print('got a dsc firmware update in info bus')
+                # First delete the entry
+                self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove()
+
+                # If the payload on dsc_firmware_update is True, then we send a command to the launcher to run an update
+                if new[1]:
+                    successful_transmission = False
+                    while not successful_transmission:
+                        # Send the message to the launcher
+                        successful_transmission = self.software_update_ws.send(
+                            json.dumps({'dsc_firmware_update': new[1]}))
+
+                        if not successful_transmission:
+                            self.software_update_ws.stop()
+                            self.software_update_ws = SoftwareUpdateNotifier(
+                                "ws://127.0.0.1:5000/delta_solar_charger_software_update")
+                            self.software_update_ws.name = 'SOFTWAREUPDATEWS'
+                            self.software_update_ws.daemon = True
+                            self.software_update_ws.start()
+
+            elif new[0] == "delete_charger":
+                charger_id = new[1]
+
+                if charger_id is not None:
+                    print('Deleting charger with charger ID:', charger_id)
+
+                    # Remove the charger ID from our charging logs
+                    if os.path.exists('/home/pi/deltasolarcharger/data/charging_logs/' + charger_id):
+                        os.remove('/home/pi/deltasolarcharger/data/charging_logs/' + charger_id)
+
+                    # Remove the charger ID from Firebase
+                    self.db.child('users').child(self.uid).child("evc_inputs").child(charger_id).remove()
+                    self.db.child('users').child(self.uid).child("evc_inputs").child('charging').child(
+                        charger_id).remove()
+                    self.db.child('users').child(self.uid).child("ev_chargers").child(charger_id).remove()
+                    self.db.child('users').child(self.uid).child("charging_history").child(charger_id).remove()
+                    self.db.child('users').child(self.uid).child("charging_history_keys").child(charger_id).remove()
+                    self.db.child('users').child(self.uid).child("analytics").child('charging_history_analytics').child(
+                        charger_id).remove()
+
+                    # Now remove the charging logs folder from the FTP server
+                    with FTP(host=self._FTP_HOST) as ftp:
+                        ftp.login(user=self._FTP_USER, passwd=self._FTP_PW)
+
+                        # Change our working directory to our charging logs directory
+                        ftp.cwd("/EVCS_portal/logs/" + self.uid + '/charging_logs/')
+
+                        # Now get a list of all of the directories in this folder
+                        ftp_list = ftp.nlst()
+
+                        # Check if our charger ID has a directory in this folder
+                        if charger_id in ftp_list:
+
+                            # If there is, then delete that folder
+                            ftp.rmd("/EVCS_portal/logs/" + self.uid + '/charging_logs/' + charger_id)
+
+                    # Finally delete the delete charger command
+                    self.db.child('users').child(self.uid).child("evc_inputs").child("delete_charger").remove()
 
             elif new[0] == "misc_command":
                 data = new[1]

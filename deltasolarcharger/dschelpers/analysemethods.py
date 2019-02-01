@@ -49,7 +49,6 @@ class AnalyseMethods:
         # Define the max buffer (the highest possible buffer)
         self._MAX_BUFFER = 0.4
 
-        # Todo: ask about this
         # Define the maximum current for standalone mode (limited by the E5)
         self._MAX_STANDALONE_CURRENT = 27
         # Define the maximum current for grid connected modes (limited by the E5, trips out at 28A)
@@ -60,7 +59,7 @@ class AnalyseMethods:
         # Define the cooled off temperature
         self._BATTERY_COOLED_OFF_TEMP = 35
         # Define the throttled current limit (at 240V)
-        self._THROTTLED_BATTERY_CURRENT = 5
+        self._THROTTLED_BATTERY_CURRENT = 8
         # Define a boolean for whether or not we are currently in a temperature throttled state
         self._TEMP_THROTTLED = False
 
@@ -220,12 +219,15 @@ class AnalyseMethods:
         return sd, z
 
     def analyze_charger_list(self):
-        temp_count = 0
+        """ This function analyses the current charger list and finds the active chargers """
+
+        active_charger_count = 0
         active_charger_list = []
         for charger_id, charger_payload in self.charger_list.items():
+
             # If this charger is not False, then we add to our count of alive chargers
             if charger_payload['charging']:
-                temp_count += 1
+                active_charger_count += 1
                 active_charger_list.append(charger_id)
 
             # Check if our chargerID is in the wind down dict
@@ -233,7 +235,7 @@ class AnalyseMethods:
                 # If it's not then we need to add a deque for that chargerID into the dict
                 self.charging_wind_down_dict[charger_id] = deque([], self._WINDOWSIZE)
 
-        return temp_count, active_charger_list
+        return active_charger_count, active_charger_list
 
     def check_and_change_inverter_op_mode(self, current_mode, proposed_mode):
         # Set the inverter mode to standalone mode if it isn't already
@@ -254,8 +256,9 @@ class AnalyseMethods:
         # Take the weighted average of the current window
         pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
 
-        # Apply the buffer to the weighted average
-        # pv_window_mean = pv_window_mean * (1 - self._BUFFER)
+        # Apply the buffer to the weighted average if we are in standalone mode
+        if data['inverter_status'] == "Stand Alone":
+            pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
         # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
@@ -360,8 +363,6 @@ class AnalyseMethods:
         else:
             # ... and we are BT SOC throttled
             if self._BTSOC_THROTTLED:
-
-                # Todo: Test inverter op mode
                 # Set the inverter mode to charge first so it doesn't use the battery
                 self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'CHARGE_FIRST_MODE')
 
@@ -395,6 +396,13 @@ class AnalyseMethods:
         # See how munch the total DC generation for the last second was
         approx_dc_current = (data['dc1p'] + data['dc2p']) / data['ac2v']
 
+        # If we have no PV power at all, just set it to 0.01 to prevent divide by 0 errors
+        if approx_dc_current == 0:
+            approx_dc_current = 0.01
+
+        # Append this total DC generation into the window. We use this window for analysis
+        self.pv_window.append(approx_dc_current)
+
         # Define the inverter's operation mode
         inverter_op_mode = data['inverter_op_mode']
 
@@ -416,9 +424,6 @@ class AnalyseMethods:
         # print('Our battery SOC is', data['btsoc'])
         # print('Inverter operation mode is', inverter_op_mode)
         # print('Inverters status is', inverter_status)
-
-        # Append this total DC generation into the window. We use this window for analysis
-        self.pv_window.append(approx_dc_current)
 
         # If we have more than one active charger
         if num_active_chargers > 1:
@@ -493,8 +498,9 @@ class AnalyseMethods:
                 # Take the weighted average of the current window
                 pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
 
-                # Apply the buffer to the weighted average
-                # pv_window_mean = pv_window_mean * (1 - self._BUFFER)
+                # Apply the buffer to the weighted average if we are in standalone mode
+                if inverter_status == "Stand Alone":
+                    pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
                 # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
@@ -814,7 +820,7 @@ class AnalyseMethods:
 
     def calibrate_charge_rate(self, data):
 
-        # See how munch the total DC generation for the last second was
+        # See how much the total DC generation for the last second was
         approx_dc_current = (data['dc1p'] + data['dc2p']) / data['ac2v']
 
         # Append this total DC generation into the window
@@ -887,7 +893,7 @@ class AnalyseMethods:
                 print('Buffer aggressiveness changed to', payload['buffer_aggro_mode'])
                 self._BUFFER_AGGRESSIVENESS = payload['buffer_aggro_mode']
 
-            elif purpose == "metervalue_current'":
+            elif purpose == "metervalue_current":
                 # Todo: might be exception here if chargerID hasn't been defined yet
                 temp_charger_id = payload['chargerID']
                 temp_metervalue_current = payload['metervalue_current']
@@ -915,7 +921,7 @@ class AnalyseMethods:
                 return charge_rate
 
         except ZeroDivisionError as error:
-            print('We have no PV, just skip', error)
+            print('We have no PV, just skip. Error:', error)
             return {
                 'available_current': 0,
                 'charge_rates': {}

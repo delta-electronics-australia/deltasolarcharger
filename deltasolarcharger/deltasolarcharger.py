@@ -378,9 +378,15 @@ def main():
     except AttributeError as e:
         print(e)
     try:
-        print('Closing manual control listener from main')
+        print('Closing dsc firmware update listener from main')
         firebasecommunications_process.dsc_firmware_update_listener.close()
         firebasecommunications_process.dsc_firmware_update_listener = None
+    except AttributeError as e:
+        print(e)
+    try:
+        print('Closing delete charger listener from main')
+        firebasecommunications_process.delete_charger_listener.close()
+        firebasecommunications_process.delete_charger_listener = None
     except AttributeError as e:
         print(e)
     try:
@@ -389,6 +395,7 @@ def main():
         firebasecommunications_process.misc_listener = None
     except AttributeError as e:
         print(e)
+
     print(firebasecommunications_process.refresh_timer, datetime.now())
     firebasecommunications_process.refresh_timer.cancel()
     print('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())

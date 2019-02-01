@@ -68,6 +68,7 @@ class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):
         decoded_message = loads(message)
         if decoded_message['dsc_firmware_update']:
             print('doing an update now!')
+            check_for_updates()
             pass
 
 
