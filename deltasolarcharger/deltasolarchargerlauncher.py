@@ -47,14 +47,21 @@ class ConfigServer(tornado.web.Application):
         tornado.ioloop.IOLoop.instance().start()
 
 
-class FactoryResetHandler(tornado.web.RequestHandler):
-    def post(self):
+class FactoryResetHandler(tornado.websocket.WebSocketHandler):
+
+    def open(self):
+        print('FactoryResetHandler open!')
+
+    def on_message(self, message):
         print("Post in factory reset handler!")
-        decoded_message = json_decode(self.request.body)
+        decoded_message = loads(message)
+        self.perform_factory_reset()
 
     def perform_factory_reset(self):
-        # Todo: delete the data folder, remove whole user node in Firebase - need to test if this can be recovered
-        pass
+        # Todo: delete the data folder
+
+        # Now restart the whole program
+        restart()
 
 
 class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):
@@ -286,6 +293,11 @@ def download_from_ftp():
         # First download deltasolarcharger.py
         ftp.cwd("/deltasolarcharger/deltasolarcharger/")
         with open('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarcharger.py', 'wb') as file:
+            ftp.retrbinary('RETR ' + 'deltasolarcharger.py', file.write)
+
+        # Now download deltasolarchargerlauncher.py
+        ftp.cwd("/deltasolarcharger/deltasolarcharger/")
+        with open('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarchargerlauncher.py', 'wb') as file:
             ftp.retrbinary('RETR ' + 'deltasolarcharger.py', file.write)
 
         # Then download all of the files in dschelpers

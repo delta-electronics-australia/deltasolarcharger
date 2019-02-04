@@ -18,6 +18,49 @@ import pyrebase
 import websocket
 
 
+class FactoryResetNotifier(Thread):
+    def __init__(self, url):
+        self.url = url
+        self.ws = None
+        super().__init__()
+
+    def run(self):
+        self.ws = websocket.WebSocketApp(self.url, on_message=self.on_message, on_error=self.on_error,
+                                         on_close=self.on_close)
+        self.ws.on_open = self.on_open
+        self.ws.run_forever()
+
+    def on_message(self, message):
+        received_message = json.loads(message)
+        print(received_message)
+
+    def on_error(self, error):
+        print(error)
+
+    def on_open(self, message):
+        print(message)
+
+    def on_close(self, message):
+        print(message)
+
+    def send(self, data):
+        try:
+            self.ws.send(data)
+        except BrokenPipeError as e:
+            print(e)
+            return False
+
+        except websocket.WebSocketConnectionClosedException as e:
+            print(e)
+            return False
+
+        return True
+
+    def stop(self):
+        print('Software Update stop signal received')
+        self.ws.close()
+
+
 class SoftwareUpdateNotifier(Thread):
     def __init__(self, url):
         self.url = url
@@ -187,6 +230,7 @@ class FirebaseMethods:
         self.update_firmware_listener = None
         self.dsc_firmware_update_listener = None
         self.delete_charger_listener = None
+        self.factory_reset_listener = None
         self.misc_listener = None
 
         # Define our update_firebase flags
@@ -271,13 +315,19 @@ class FirebaseMethods:
                     self.handle_internet_check()
 
             # (If we are online) Handle all of the data syncing
-            # self.perform_file_integrity_check(full_check=False)
+            self.perform_file_integrity_check(full_check=False)
 
             # Define our update software notifier
             self.software_update_ws = SoftwareUpdateNotifier("ws://127.0.0.1:5000/delta_solar_charger_software_update")
             self.software_update_ws.name = 'SOFTWAREUPDATEWS'
             self.software_update_ws.daemon = True
             self.software_update_ws.start()
+
+            # Define our factory reset notifier
+            self.factory_reset_ws = FactoryResetNotifier("ws://127.0.0.1:5000/delta_solar_charger_factory_reset")
+            self.factory_reset_ws.name = 'FACTORYRESETWS'
+            self.factory_reset_ws.daemon = True
+            self.factory_reset_ws.start()
 
         print('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
 
@@ -732,6 +782,12 @@ class FirebaseMethods:
         except AttributeError as e:
             print(e)
         try:
+            print('factory_reset_listener before closing:', self.factory_reset_listener)
+            self.factory_reset_listener.close()
+            print('factory_reset_listener after closing:', self.factory_reset_listener)
+        except AttributeError as e:
+            print(e)
+        try:
             print('misc listener before closing:', self.misc_listener)
             self.misc_listener.close()
             print('misc listener after closing:', self.misc_listener)
@@ -777,6 +833,11 @@ class FirebaseMethods:
             'evc_inputs/delete_charger').stream(stream_handler=self.firebase_stream_handler,
                                                 token=self.idToken,
                                                 stream_id="delete_charger")
+
+        self.factory_reset_listener = self.db.child("users").child(self.uid).child(
+            'evc_inputs/factory_reset').stream(stream_handler=self.firebase_stream_handler,
+                                               token=self.idToken,
+                                               stream_id="factory_reset")
 
         self.misc_listener = self.db.child("users").child(self.uid).child('evc_inputs/misc_command').stream(
             stream_handler=self.firebase_stream_handler, token=self.idToken, stream_id="misc_command")
@@ -852,6 +913,9 @@ class FirebaseMethods:
 
         elif message['stream_id'] == "delete_charger":
             self.information_bus.put(('delete_charger', message['data']))
+
+        elif message['stream_id'] == "factory_reset":
+            self.information_bus.put(('factory_reset', message['data']))
 
         elif message['stream_id'] == "misc_command" and message['data']:
             self.information_bus.put(('misc_command', message['data']))
@@ -1036,8 +1100,9 @@ class FirebaseMethods:
 
                 # If we got a StartTransaction message
                 if is_start_transaction_message is True:
-                    # charging_timestamp = datetime.now().strftime('%Y-%m-%d %H%M')
+
                     charging_timestamp = received_timestamp
+
                     # If charging is True then we need to add a timestamp to use for logging
                     self._charger_status_list[temp_chargerID]['charging_timestamp'] = charging_timestamp
 
@@ -1073,7 +1138,7 @@ class FirebaseMethods:
                             total_charge_duration = total_charge_duration.total_seconds()
 
                             print('We have a stop transaction, total charge duration is', total_charge_duration)
-                            # Upload our analytics to analytics -> charging_history_analytics -> chargerID -> date -> time
+                            # Upload our analytics to analytics->charging_history_analytics->chargerID->date->time
                             try:
                                 self.db.child("users").child(self.uid).child(
                                     "analytics/charging_history_analytics").child(
@@ -1169,7 +1234,7 @@ class FirebaseMethods:
                     else:
                         self.ocpp_ws.send(json.dumps({'chargerID': temp_chargerID, 'purpose': 'misc_command',
                                                       'action': "ChangeConfiguration",
-                                                      'misc_data': {"key": "MeterValueSampleInterval", "value": "5"}}))
+                                                      'misc_data': {"key": "MeterValueSampleInterval", "value": "10"}}))
                 except ConnectionRefusedError as e:
                     print(e, 'got a connection refused error')
                     pass
@@ -1260,17 +1325,23 @@ class FirebaseMethods:
                         timestamp_delta = datetime.now() - charging_timestamp_obj
                         print('Our timestamp delta will be for this metervalue message is: ', timestamp_delta.seconds)
 
-                        # if timestamp_delta.seconds > 120:
-                        #     live = False
+                        # If timestamp is less than 2 minutes off server time, use server time as current timestamp
+                        if timestamp_delta.seconds < 120:
+                            print('Our metervalues message is live. Using server time as the timestamp')
+                            final_metervalue_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
+                        else:
+                            print('Our metervalues message is not live. Using the message timestamp')
+                            final_metervalue_timestamp = str(
+                                datetime.strptime(temp_charging_timestamp, '%Y-%m-%dT%H:%M:%SZ'))
 
-                        print('Got a metervalue message and it belongs to', temp_chargerID, 'of timestamp',
+                        print('Got a metervalue message and it belongs to', temp_chargerID, 'of charging timestamp:',
                               self._charger_status_list[temp_chargerID]['charging_timestamp'])
 
                         # Initialize a list that is 11 entries long
                         temp_metervalue_entry = ["" for _ in range(11)]
 
                         # The timestamp we use will be the timestamp from the MeterValue message
-                        temp_metervalue_entry[0] = str(datetime.strptime(temp_charging_timestamp, '%Y-%m-%dT%H:%M:%SZ'))
+                        temp_metervalue_entry[0] = final_metervalue_timestamp
 
                         for metervalue_dict in temp_metervalues_payload:
                             if metervalue_dict['measurand'] == 'Voltage':
@@ -1418,12 +1489,38 @@ class FirebaseMethods:
 
                         # Check if our charger ID has a directory in this folder
                         if charger_id in ftp_list:
-
                             # If there is, then delete that folder
                             ftp.rmd("/EVCS_portal/logs/" + self.uid + '/charging_logs/' + charger_id)
 
                     # Finally delete the delete charger command
                     self.db.child('users').child(self.uid).child("evc_inputs").child("delete_charger").remove()
+
+            elif new[0] == "factory_reset":
+                # If the payload on dsc_firmware_update is True, then we send a command to the launcher to run an update
+                if new[1]:
+
+                    successful_transmission = False
+                    while not successful_transmission:
+                        # Send the message to the launcher
+                        successful_transmission = self.factory_reset_ws.send(
+                            json.dumps({'dsc_firmware_update': new[1]}))
+
+                        if not successful_transmission:
+                            self.factory_reset_ws.stop()
+                            self.factory_reset_ws = FactoryResetNotifier(
+                                "ws://127.0.0.1:5000/delta_solar_charger_factory_reset")
+                            self.factory_reset_ws.name = 'FACTORYRESETWS'
+                            self.factory_reset_ws.daemon = True
+                            self.factory_reset_ws.start()
+
+                    # First delete the entry
+                    self.db.child('users').child(self.uid).child("evc_inputs").child("factory_reset").remove()
+
+                    # First delete the config file
+                    # os.remove('/home/pi/deltasolarcharger/config/config.sqlite')
+
+                    # Now delete the whole user node
+                    # self.db.child('users').child(self.uid).remove()
 
             elif new[0] == "misc_command":
                 data = new[1]

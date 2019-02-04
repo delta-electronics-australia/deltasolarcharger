@@ -156,23 +156,26 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             # We also reset our zero counter
             self.zero_counter = 0
 
-            # Record the timestamp and convert the timestamp from 2018-09-18T11:25:14Z to 2018-09-18 1125
+            # Record the timestamp from the StartTransaction message
             timestamp = self.decoded_message[3]["timestamp"]
-            self.charging_timestamp = timestamp.split('T')[0] + ' ' + timestamp.split('T')[1][0:5].replace(':', '')
+
+            # Record the meter value from the StartTransaction message
             self.meter_value = float(self.decoded_message[3]["meterStart"]) / 1000
 
-            # # Convert the raw timestamp into a datetime object
-            # charging_timestamp_obj = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
-            # # Find the difference between the time now and the time on the timestamp
-            # timestamp_delta = datetime.now() - charging_timestamp_obj
-            #
-            # # If the difference in time is greater than 1 minute and 20 seconds then this is not a live charging session
-            # if timestamp_delta.seconds > 80:
-            #     live = False
-            #
-            # # If the difference is smaller, then we consider this a live charging session
-            # else:
-            #     live = True
+            # Convert the raw timestamp into a datetime object
+            charging_timestamp_obj = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
+            # Find the difference between the time now and the time on the timestamp
+            timestamp_delta = datetime.now() - charging_timestamp_obj
+
+            # If the difference in time is greater than 1 minute and 20 seconds then this is not a live charging session
+            if timestamp_delta.seconds > 120:
+                self.charging_timestamp = timestamp.split('T')[0] + ' ' + timestamp.split('T')[1][0:5].replace(':', '')
+                live = False
+
+            # If the difference is smaller, then we consider this a live charging session so we use our own timestamp
+            else:
+                self.charging_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H%M')
+                live = True
 
             # Define our transactionID for the charging session
             self.transaction_id = randint(100, 76437)
@@ -180,7 +183,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             if self.data_handler[0]:
                 self.data_handler[0].write_message(
                     json.dumps({"transaction_alert": self._isCharging, "chargerID": self._CHARGER_ID,
-                                'meterValue': float(self.decoded_message[3]["meterStart"]) / 1000,
+                                'meterValue': self.meter_value,
                                 'charging_timestamp': self.charging_timestamp, 'transaction_id': self.transaction_id
                                 }))
 
@@ -191,7 +194,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
             self._TRANSACTION_ID_DICT.update({self.transaction_id: {
                 'meterValue': float(self.decoded_message[3]["meterStart"]) / 1000,
-                'charging_timestamp': self.charging_timestamp}})
+                'charging_timestamp': self.charging_timestamp, 'live': live}})
 
             return response_database.StartTransaction(self.transaction_id)
 
@@ -276,9 +279,23 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             self._isCharging = False
             self.zero_counter = 0
 
-            # Record the end timestamp and convert it
             timestamp = self.decoded_message[3]["timestamp"]
-            timestamp = timestamp.split('T')[0] + ' ' + timestamp.split('T')[1][0:5].replace(':', '')
+
+            # Convert the raw timestamp into a datetime object
+            charging_timestamp_obj = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
+            # Find the difference between the time now and the time on the timestamp
+            timestamp_delta = datetime.now() - charging_timestamp_obj
+
+            # If the received StopTransaction message is not live then we take the timestamp from the message
+            if timestamp_delta.seconds > 120:
+                print('Our StopTransaction message is not live! Send the timestamp from the message')
+                timestamp = self.decoded_message[3]["timestamp"]
+                timestamp = timestamp.split('T')[0] + ' ' + timestamp.split('T')[1][0:5].replace(':', '')
+
+            # If the received StopTransaction message IS live then we take the current time as the timestamp
+            else:
+                print('Our StopTransaction message is live! Sending the current server timestamp')
+                timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H%M')
 
             # Make the class timestamp for this charger None (since we're not charging anymore)
             self.charging_timestamp = None

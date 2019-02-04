@@ -390,6 +390,12 @@ def main():
     except AttributeError as e:
         print(e)
     try:
+        print('Closing factory reset listener from main')
+        firebasecommunications_process.factory_reset_listener.close()
+        firebasecommunications_process.factory_reset_listener = None
+    except AttributeError as e:
+        print(e)
+    try:
         print('Closing misc listener listener from main')
         firebasecommunications_process.misc_listener.close()
         firebasecommunications_process.misc_listener = None
