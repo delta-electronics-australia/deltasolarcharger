@@ -24,9 +24,6 @@ class AnalyseMethods:
 
         self.charger_list = dict()
 
-        # Define the variable for the number of alive chargers
-        self._NUM_ACTIVE_CHARGERS = 0
-
         # Define the base charge rate in Amps
         self._BASE_CHARGE_RATE = 6
         # Define the variable for the current charge rate
@@ -451,7 +448,6 @@ class AnalyseMethods:
 
             elif self._CHARGING_MODE == "MAX_CHARGE_STANDALONE" or self._CHARGING_MODE == "PV_with_BT":
                 final_charge_rate = self.multiple_charger_calculate_max_charge_standalone(data, num_active_chargers)
-                # final_charge_rate = self._MAX_STANDALONE_CURRENT
 
                 # If we do not have a string for the final charge rate then we just split it and go on
                 if final_charge_rate is not str:
@@ -596,7 +592,7 @@ class AnalyseMethods:
                                   'and we are in grid connected mode', 'limiting to 6A')
                             self._THROTTLE_ADJUSTED_CHARGE_RATE = 6
 
-                        # If our solar is above 7A then we can just charge at that same rate
+                        # If our solar is above 6A then we can just charge at that same rate
                         else:
                             self.check_and_change_inverter_op_mode(inverter_op_mode,
                                                                    'SELF_CONSUMPTION_MODE_INTERNAL')

@@ -64,10 +64,6 @@ def authenticate():
     #     }
     # })
 
-    # Send a package to update ACMP firmware
-    db.child("users").child(uid).child('evc_inputs').update({
-        "delete_charger": "CSIRO1"
-    })
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).child('evc_inputs').update({
@@ -80,18 +76,18 @@ def authenticate():
     #     }
     # })
 
-    # try:
-    #     # Send a package to send a misc command - LEGIT
-    #     db.child("users").child(uid).child('evc_inputs').update({
-    #         "misc_command": {
-    #             'chargerID': "MEL-ACMP-WIFI",
-    #             'action': 'GetDiagnostics',
-    #             'misc_data': 'StatusNotification'
-    #         }
-    #     })
-    # except OSError:
-    #     print('got an OSerror')
-    #     pass
+    try:
+        # Send a package to send a misc command - LEGIT
+        db.child("users").child(uid).child('evc_inputs').update({
+            "misc_command": {
+                'chargerID': "MEL-ACMP",
+                'action': 'RemoteStartTransaction',
+                'misc_data': 'StatusNotification'
+            }
+        })
+    except OSError:
+        print('got an OSerror')
+        pass
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).update({

@@ -6,6 +6,7 @@ import psutil
 import time
 import threading
 import os
+import shutil
 import sys
 import time
 import requests
@@ -57,8 +58,13 @@ class FactoryResetHandler(tornado.websocket.WebSocketHandler):
         decoded_message = loads(message)
         self.perform_factory_reset()
 
-    def perform_factory_reset(self):
-        # Todo: delete the data folder
+    @staticmethod
+    def perform_factory_reset():
+        # First delete the config file
+        os.remove('/home/pi/deltasolarcharger/config/config.sqlite')
+
+        # Delete the data folder
+        shutil.rmtree('/home/pi/deltasolarcharger/data')
 
         # Now restart the whole program
         restart()
@@ -158,41 +164,60 @@ class ModifySettingsHandler(tornado.web.RequestHandler):
         self.write(response)
 
 
-def configure_3g_settings():
+def configure_ip_tables(selected_interface):
     """ This function sets our IP tables when a 3G connection is detected """
 
-    celluar_network_interfaces = ['ppp0', 'wwan0']
+    if selected_interface == "3G":
+        print('We have selected the 3G interface!')
 
-    for i in range(60):
-        network_interfaces = psutil.net_if_addrs().keys()
+        celluar_network_interfaces = ['ppp0', 'wwan0']
 
-        celluar_interface = [interface for interface in celluar_network_interfaces if interface in network_interfaces]
+        for i in range(60):
+            network_interfaces = psutil.net_if_addrs().keys()
 
-        print(celluar_interface)
+            celluar_interface = [interface for interface in celluar_network_interfaces if
+                                 interface in network_interfaces]
 
-        if len(celluar_interface) == 1:
+            print(celluar_interface)
 
-            # First remove all existing rules in IP tables
-            for interface in ['ppp0', 'wwan0']:
-                os.system('sudo iptables -t nat -D POSTROUTING -o ' + interface + ' -j MASQUERADE')
-                os.system('sudo iptables -D FORWARD -i ' + interface +
-                          ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
-                os.system('sudo iptables -D FORWARD -i wlan0 -o ' + interface + ' -j ACCEPT')
+            if len(celluar_interface) == 1:
 
-            # Now add the rules that we want
-            if celluar_interface[0] == "ppp0" or celluar_interface[0] == "wwan0":
-                os.system('sudo iptables -t nat -A POSTROUTING -o ' + celluar_interface[0] + ' -j MASQUERADE')
-                os.system('sudo iptables -A FORWARD -i ' + celluar_interface[0] +
-                          ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
-                os.system('sudo iptables -A FORWARD -i wlan0 -o ' + celluar_interface[0] + ' -j ACCEPT')
-                break
-            else:
-                print("Odd interface...")
+                # First remove all existing rules in IP tables
+                for interface in ['ppp0', 'wwan0']:
+                    os.system('sudo iptables -t nat -D POSTROUTING -o ' + interface + ' -j MASQUERADE')
+                    os.system('sudo iptables -D FORWARD -i ' + interface +
+                              ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
+                    os.system('sudo iptables -D FORWARD -i wlan0 -o ' + interface + ' -j ACCEPT')
 
-        time.sleep(1)
+                # Now add the rules that we want
+                if celluar_interface[0] == "ppp0" or celluar_interface[0] == "wwan0":
+                    os.system('sudo iptables -t nat -A POSTROUTING -o ' + celluar_interface[0] + ' -j MASQUERADE')
+                    os.system('sudo iptables -A FORWARD -i ' + celluar_interface[0] +
+                              ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
+                    os.system('sudo iptables -A FORWARD -i wlan0 -o ' + celluar_interface[0] + ' -j ACCEPT')
+                    break
+                else:
+                    print("Odd interface...")
 
-    global _LIMIT_DATA
-    _LIMIT_DATA = True
+            time.sleep(1)
+
+        global _LIMIT_DATA
+        _LIMIT_DATA = True
+
+    elif selected_interface == "ethernet":
+        print('We have selected the ethernet interface!')
+
+        # First remove all existing rules in IP tables
+        for interface in ['eth0', 'eth1']:
+            os.system('sudo iptables -t nat -D POSTROUTING -o ' + interface + ' -j MASQUERADE')
+            os.system('sudo iptables -D FORWARD -i ' + interface +
+                      ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
+            os.system('sudo iptables -D FORWARD -i wlan0 -o ' + interface + ' -j ACCEPT')
+
+        # Now add the rules that we want
+        os.system('sudo iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE')
+        os.system('sudo iptables -A FORWARD -i eth1 -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
+        os.system('sudo iptables -A FORWARD -i wlan0 -o eth1 -j ACCEPT')
 
 
 def check_internet():
@@ -208,10 +233,11 @@ def check_internet():
     if firebase_cred['connectionMethod'] == 'none':
         return False
 
-    # Check if the system is set for a 3G connection
-    elif 'connectionMethod' in firebase_cred and firebase_cred["connectionMethod"] == "3G":
+    # If there is a connectionMethod in firebase_cred then we have to configure our ip tables
+    elif 'connectionMethod' in firebase_cred:
+
         # Then we need to configure some 3G settings - writing to IP tables so chargers can have internet
-        configure_3g_settings()
+        configure_ip_tables(firebase_cred['connectionMethod'])
 
     # Now we ping Google to check if the internet is up. If after 2 minutes it is still not up, then _ONLINE = False
     internet_status = False

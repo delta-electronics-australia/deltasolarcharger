@@ -315,7 +315,7 @@ class FirebaseMethods:
                     self.handle_internet_check()
 
             # (If we are online) Handle all of the data syncing
-            self.perform_file_integrity_check(full_check=False)
+            # self.perform_file_integrity_check(full_check=False)
 
             # Define our update software notifier
             self.software_update_ws = SoftwareUpdateNotifier("ws://127.0.0.1:5000/delta_solar_charger_software_update")
@@ -750,47 +750,47 @@ class FirebaseMethods:
 
         # First close existing listeners
         try:
-            print('charging mode listener before closing:', self.charging_modes_listener.sse.running)
+            # print('charging mode listener before closing:', self.charging_modes_listener.sse.running)
             self.charging_modes_listener.close()
-            print('charging mode listener successfully closed')
-            print('charging mode listener after closing:', self.charging_modes_listener.sse.running)
+            # print('charging mode listener successfully closed')
+            # print('charging mode listener after closing:', self.charging_modes_listener.sse.running)
         except AttributeError as e:
             print(e, 'but continue in refresh_tokens 2')
 
         try:
-            print('buffer listener before closing:', self.buffer_aggressiveness_listener)
+            # print('buffer listener before closing:', self.buffer_aggressiveness_listener)
             self.buffer_aggressiveness_listener.close()
-            print('buffer listener after closing:', self.buffer_aggressiveness_listener)
+            # print('buffer listener after closing:', self.buffer_aggressiveness_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('firmware listener before closing:', self.update_firmware_listener)
+            # print('firmware listener before closing:', self.update_firmware_listener)
             self.update_firmware_listener.close()
-            print('firmware listener after closing:', self.update_firmware_listener)
+            # print('firmware listener after closing:', self.update_firmware_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('dsc firmware upgrade listener before closing:', self.dsc_firmware_update_listener)
+            # print('dsc firmware upgrade listener before closing:', self.dsc_firmware_update_listener)
             self.dsc_firmware_update_listener.close()
-            print('dsc firmware upgrade listener after closing:', self.dsc_firmware_update_listener)
+            # print('dsc firmware upgrade listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('delete_charger_listener before closing:', self.dsc_firmware_update_listener)
+            # print('delete_charger_listener before closing:', self.dsc_firmware_update_listener)
             self.delete_charger_listener.close()
-            print('delete_charger_listener after closing:', self.dsc_firmware_update_listener)
+            # print('delete_charger_listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('factory_reset_listener before closing:', self.factory_reset_listener)
+            # print('factory_reset_listener before closing:', self.factory_reset_listener)
             self.factory_reset_listener.close()
-            print('factory_reset_listener after closing:', self.factory_reset_listener)
+            # print('factory_reset_listener after closing:', self.factory_reset_listener)
         except AttributeError as e:
             print(e)
         try:
-            print('misc listener before closing:', self.misc_listener)
+            # print('misc listener before closing:', self.misc_listener)
             self.misc_listener.close()
-            print('misc listener after closing:', self.misc_listener)
+            # print('misc listener after closing:', self.misc_listener)
         except AttributeError as e:
             print(e)
 
@@ -853,15 +853,6 @@ class FirebaseMethods:
             # If path is '/' then we know it is initial run or both has been modified
             if message['path'] == '/':
                 if 'single_charging_mode' in message['data']:
-                    # # If mode changed to MAX_CHARGE_GRID and we are in standalone mode, we have to reverse the change
-                    # if message['data']['single_charging_mode'] == "MAX_CHARGE_GRID" and \
-                    #         self.latest_firebase_data['inverter_data']['inverter_status'] == "STANDALONE":
-                    #     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes/').update({
-                    #         'single_charging_mode': self._CHARGING_MODE
-                    #     })
-                    #
-                    # # In all other scenarios, just run as normal
-                    # else:
                     self._CHARGING_MODE = message['data']['single_charging_mode']
                     self.firebase_to_analyse_queue.put(
                         {'purpose': 'change_single_charging_mode',
@@ -877,16 +868,6 @@ class FirebaseMethods:
                         pass
 
             elif message['path'] == "/single_charging_mode":
-
-                # # If mode changed to MAX_CHARGE_GRID and we are in standalone mode, we have to reverse the change
-                # if message['data'] == "MAX_CHARGE_GRID" and self.latest_firebase_data[
-                #     'inverter_status'] == "STANDALONE":
-                #     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes/').update({
-                #         'single_charging_mode': self._CHARGING_MODE
-                #     })
-                #
-                # # In all other scenarios, just run as normal
-                # else:
                 self._CHARGING_MODE = message['data']
                 self.firebase_to_analyse_queue.put(
                     {'purpose': 'change_single_charging_mode', 'charge_mode': message['data']})
@@ -1350,10 +1331,11 @@ class FirebaseMethods:
                             elif metervalue_dict['measurand'] == "Current.Import":
                                 temp_metervalue_entry[2] = metervalue_dict['value']
 
+                                # Todo: renable this when we need it
                                 # Transfer our metervalue current to analyze methods
-                                self.firebase_to_analyse_queue.put(
-                                    {'purpose': 'metervalue_current', 'chargerID': temp_chargerID,
-                                     'metervalue_current': metervalue_dict['value']})
+                                # self.firebase_to_analyse_queue.put(
+                                #     {'purpose': 'metervalue_current', 'chargerID': temp_chargerID,
+                                #      'metervalue_current': metervalue_dict['value']})
 
                             elif metervalue_dict['measurand'] == "Power.Active.Import":
                                 temp_metervalue_entry[3] = metervalue_dict['value']
@@ -1408,20 +1390,26 @@ class FirebaseMethods:
 
                 # If we got a firmware update request with a "True" value of set
                 if data is not None and data['set']:
-                    # Use the included chargerID to look up the charger model
-                    charger_model = self.db.child("users").child(self.uid).child('evc_inputs').child(
-                        data['chargerID']).child('charger_info/chargePointModel').get(self.idToken).val()
-                    print('We have identified that the charger model is:', charger_model)
+                    try:
+                        # Use the included chargerID to look up the charger model
+                        charger_model = self.db.child("users").child(self.uid).child('evc_inputs').child(
+                            data['chargerID']).child('charger_info/chargePointModel').get(self.idToken).val()
+                        print('We have identified that the charger model is:', charger_model)
 
-                    # Send the request to the OCPP server
-                    self.ocpp_ws.send(json.dumps(
-                        {'chargerID': data['chargerID'], 'charger_model': charger_model,
-                         'firmwareType': data['firmwareType'], 'purpose': 'update_firmware', 'fw_url': data['fw_url']}
-                    ))
+                        # Send the request to the OCPP server
+                        self.ocpp_ws.send(json.dumps(
+                            {'chargerID': data['chargerID'], 'charger_model': charger_model,
+                             'firmwareType': data['firmwareType'], 'purpose': 'update_firmware',
+                             'fw_url': data['fw_url']}
+                        ))
 
-                    # Reset the update_firmware values in Firebase
-                    self.db.child("users").child(self.uid).child('evc_inputs/update_firmware').remove()
-                    self.db.child("users").child(self.uid).child('evc_inputs/temp_remote_fw_update_info').remove()
+                        # Reset the update_firmware values in Firebase
+                        self.db.child("users").child(self.uid).child('evc_inputs/update_firmware').remove()
+                        self.db.child("users").child(self.uid).child('evc_inputs/temp_remote_fw_update_info').remove()
+
+                    except OSError as e:
+                        print('Update Firmware time out', e)
+                        self.handle_internet_check()
 
             elif new[0] == "fw_status":
                 temp_chargerID = new[2]
@@ -1515,9 +1503,6 @@ class FirebaseMethods:
 
                     # First delete the entry
                     self.db.child('users').child(self.uid).child("evc_inputs").child("factory_reset").remove()
-
-                    # First delete the config file
-                    # os.remove('/home/pi/deltasolarcharger/config/config.sqlite')
 
                     # Now delete the whole user node
                     # self.db.child('users').child(self.uid).remove()

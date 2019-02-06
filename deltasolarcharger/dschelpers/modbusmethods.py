@@ -131,6 +131,9 @@ class ModbusMethods:
                 elif new_payload['inverter_op_mode'] == "SELF_CONSUMPTION_MODE_INTERNAL":
                     self.E5.write_register(25626, 1, 0, 6, False)
                     print('Changed mode to Self Consumption Mode!')
+                elif new_payload['inverter_op_mode'] == "WITHOUTBTMODE":
+                    self.E5.write_register(25626, 6, 0, 6, False)
+                    print('Changed mode to Without BT Mode!')
 
         # Grab all inverter_cont_data
         inverter_data = dict()
