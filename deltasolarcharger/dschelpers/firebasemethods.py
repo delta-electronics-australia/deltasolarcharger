@@ -619,8 +619,8 @@ class FirebaseMethods:
             # If logging is turned on
             if self._LOG:
                 # Check if the folder for the charger exists
-                if not os.path.isdir('../data/charging_logs/' + location.split('/')[1]):
-                    os.makedirs('../data/charging_logs/' + location.split('/')[1])
+                if not os.path.isdir('../data/charging_logs/' + location.split('/')[3]):
+                    os.makedirs('../data/charging_logs/' + location.split('/')[3])
 
                 # First check if there is a file for the log file we are opening
                 if not os.path.isfile(location + '.csv'):

@@ -37,7 +37,7 @@ def authenticate():
     print('Attempting to authenticate with Firebase')
     firebase = pyrebase.initialize_app(config)
     auth = firebase.auth()
-    user = auth.sign_in_with_email_and_password("jgv115@gmail.com", "test123")
+    user = auth.sign_in_with_email_and_password("test123@gmail.com", "test123")
     uid = user['localId']
     idToken = user['idToken']
 
@@ -68,11 +68,11 @@ def authenticate():
     # # Send a package to send a misc command
     # db.child("users").child(uid).child('evc_inputs').update({
     #     "misc_command": {
-    #         'chargerID': "MEL-ACMP-WIFI",
+    #         'chargerID': "CSIRO-ACMP4",
     #         # 'action': 'GetConfiguration',
     #         'action': 'ChangeConfiguration',
     #         # 'misc_data': {'key': ['AuthorizationRequired', 'NonAuthorizedTag', 'OfflinePolicy', 'ClockAlignedDataInterval']},
-    #         'misc_data': {"key": "MeterValueSampleInterval", "value": "5"}
+    #         'misc_data': {"key": "MeterValueSampleInterval", "value": "10"}
     #     }
     # })
 
@@ -80,9 +80,9 @@ def authenticate():
         # Send a package to send a misc command - LEGIT
         db.child("users").child(uid).child('evc_inputs').update({
             "misc_command": {
-                'chargerID': "MEL-ACMP",
-                'action': 'RemoteStartTransaction',
-                'misc_data': 'StatusNotification'
+                'chargerID': "CSIRO-ACMP4",
+                'action': 'TriggerMessage',
+                'misc_data': 'BootNotification'
             }
         })
     except OSError:

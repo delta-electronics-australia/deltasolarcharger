@@ -425,7 +425,8 @@ class AnalyseMethods:
         # If we have more than one active charger
         if num_active_chargers > 1:
 
-            if self._CHARGING_MODE == "MAX_CHARGE_GRID":
+            # If we have 3 or more chargers then we must be in grid connected mode
+            if self._CHARGING_MODE == "MAX_CHARGE_GRID" or num_active_chargers > 2:
                 # First make sure that we are in a grid connected mode
                 if inverter_status == "Stand Alone":
                     final_charge_rate = self._MAX_STANDALONE_CURRENT
@@ -448,6 +449,10 @@ class AnalyseMethods:
 
             elif self._CHARGING_MODE == "MAX_CHARGE_STANDALONE" or self._CHARGING_MODE == "PV_with_BT":
                 final_charge_rate = self.multiple_charger_calculate_max_charge_standalone(data, num_active_chargers)
+
+                print('final charge rate coming out is', final_charge_rate)
+                final_charge_rate = min(27, final_charge_rate)
+                print('final charge rate after min fix is:', final_charge_rate)
 
                 # If we do not have a string for the final charge rate then we just split it and go on
                 if final_charge_rate is not str:

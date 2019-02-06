@@ -597,10 +597,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         if messagetypeid == 2:
             action = follow_up_payload
 
-            # Todo: have a think if this needs to be here
-            # if action == "Heartbeat" and not self._isCharging:
-            #     payload = self.lookup_action_database('SetChargingProfile', optional=True)
-            #     self.write_message(json.dumps([2, str(543543), 'SetChargingProfile', payload]))
+            if action == "Heartbeat" and not self._isCharging:
+                payload = self.lookup_action_database('SetChargingProfile', optional=True)
+                self.write_message(json.dumps([2, str(543543), 'SetChargingProfile', payload]))
 
             # Send a message to the EVCS that we are alive
             if self.data_handler[0]:
