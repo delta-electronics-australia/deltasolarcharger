@@ -231,6 +231,7 @@ class FirebaseMethods:
         self.dsc_firmware_update_listener = None
         self.delete_charger_listener = None
         self.factory_reset_listener = None
+        self.manual_charge_control_listener = None
         self.misc_listener = None
 
         # Define our update_firebase flags
@@ -646,6 +647,8 @@ class FirebaseMethods:
         }
 
         self.firebase = pyrebase.initialize_app(config)
+
+        # Get a reference to the auth service
         self.auth = self.firebase.auth()
 
         # Connect to our crentials DB
@@ -656,7 +659,6 @@ class FirebaseMethods:
             firebase_cred.update({row[0]: row[1]})
 
         # Login to Firebase with the credentials
-        print(firebase_cred['firebase_email'], firebase_cred['firebase_password'])
         user = self.auth.sign_in_with_email_and_password(firebase_cred['firebase_email'],
                                                          firebase_cred['firebase_password'])
 
@@ -672,6 +674,7 @@ class FirebaseMethods:
 
         if authentication_success:
             # Initialise database
+
             self.db = self.firebase.database(timeout_length=5)
 
             # The first thing we need to do is to make sure all of the values we need to stream for are there
@@ -697,19 +700,28 @@ class FirebaseMethods:
     def initialize_firebase_db_values(self):
         """ This method makes sure that all of the values that we are streaming for exist at start up """
 
+        # Initialize our manual charge control node
+        if self.db.child("users").child(self.uid).child('evc_inputs/manual_charge_control').get(
+                self.idToken).val() is None:
+            self.db.child("users").child(self.uid).child('evc_inputs/manual_charge_control').update(
+                {'charge_rate': 0, 'chargerID': 'chargerID'},
+                self.idToken)
+
         # Initialize buffer aggressiveness mode
         if self.db.child("users").child(self.uid).child('evc_inputs/buffer_aggro_mode').get(self.idToken).val() is None:
             self.db.child("users").child(self.uid).child('evc_inputs').update({'buffer_aggro_mode': "Balanced"},
                                                                               self.idToken)
 
-        # Initialize the charging mode and multiple charging mode
+        # Initialize the charging mode and authenticated required boolean
         if self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').get(self.idToken).val() is None:
             self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').update(
                 {'single_charging_mode': "MAX_CHARGE_GRID", 'authentication_required': True},
                 self.idToken)
 
+
         # Make all of our chargers offline, we will use Heartbeats to get them online
         if self.db.child("users").child(self.uid).child('ev_chargers').get(self.idToken).val() is not None:
+
             # charger_list is the list of chargers that are registered in the system
             charger_list = list(self.db.child("users").child(self.uid).child('ev_chargers').get(self.idToken).val())
 
@@ -718,9 +730,7 @@ class FirebaseMethods:
                                                                                                  self.idToken)
 
         # Initialize the type of system this software is (to load the correct dashboard)
-        self.db.child("users").child(self.uid).update({
-            'system_type': 'multiple'
-        })
+        self.db.child("users").child(self.uid).update({'system_type': 'multiple'}, self.idToken)
 
         # We have to check if we need to handle inverter database - if yesterday's csv is not there
         with FTP(host=self._FTP_HOST) as ftp:
@@ -839,10 +849,13 @@ class FirebaseMethods:
                                                token=self.idToken,
                                                stream_id="factory_reset")
 
+        self.manual_charge_control_listener = self.db.child("users").child(self.uid).child(
+            'evc_inputs/manual_charge_control').stream(stream_handler=self.firebase_stream_handler,
+                                                       token=self.idToken,
+                                                       stream_id="manual_charge_control")
+
         self.misc_listener = self.db.child("users").child(self.uid).child('evc_inputs/misc_command').stream(
             stream_handler=self.firebase_stream_handler, token=self.idToken, stream_id="misc_command")
-
-        # print('our listeners after starting again:', self.charging_modes_listener, self.buffer_aggressiveness_listener)
 
     def firebase_stream_handler(self, message):
         """ Defines the callback due to changes in certain Firebase entries """
@@ -897,6 +910,9 @@ class FirebaseMethods:
 
         elif message['stream_id'] == "factory_reset":
             self.information_bus.put(('factory_reset', message['data']))
+
+        elif message['stream_id'] == "manual_charge_control" and message['data']:
+            self.information_bus.put(('manual_charge_control', message['data']))
 
         elif message['stream_id'] == "misc_command" and message['data']:
             self.information_bus.put(('misc_command', message['data']))
@@ -1128,7 +1144,8 @@ class FirebaseMethods:
                                         0]).child(
                                     self._charger_status_list[temp_chargerID]['charging_timestamp'].split(' ')[
                                         1]).update(
-                                    {'energy': total_energy_charged, 'duration_seconds': total_charge_duration})
+                                    {'energy': total_energy_charged, 'duration_seconds': total_charge_duration},
+                                    self.idToken)
 
                                 # If 'charging' is False then we need to update our charging database
                                 upload_thread = Thread(target=self.ftp_upload_charge_session(temp_chargerID,
@@ -1141,7 +1158,8 @@ class FirebaseMethods:
                                 # Delete the charging history record
                                 self.db.child("users").child(self.uid).child("charging_history").child(
                                     temp_chargerID).child(
-                                    self._charger_status_list[temp_chargerID]['charging_timestamp']).remove()
+                                    self._charger_status_list[temp_chargerID]['charging_timestamp']).remove(
+                                    self.idToken)
 
                             except OSError:
                                 print('transation alert - stop, charging history analytics time out')
@@ -1225,7 +1243,7 @@ class FirebaseMethods:
                     try:
                         print('Uploading', temp_charger_info, 'to Firebase for', temp_chargerID)
                         self.db.child("users").child(self.uid).child("evc_inputs").child(temp_chargerID).update(
-                            {"charger_info": temp_charger_info})
+                            {"charger_info": temp_charger_info}, self.idToken)
                     except OSError:
                         print('new charger info timeout')
                         self.handle_internet_check()
@@ -1241,9 +1259,9 @@ class FirebaseMethods:
                 if self._ONLINE:
                     try:
                         # Post our alive status to evc_inputs in Firebase
-                        self.db.child("users").child(self.uid).child("evc_inputs").child(temp_chargerID).update({
-                            "alive": new[1]
-                        })
+                        self.db.child("users").child(self.uid).child("evc_inputs").child(temp_chargerID).update(
+                            {"alive": new[1]}, self.idToken)
+
                         # Post our charger to ev_chargers in Firebase
                         self.db.child("users").child(self.uid).child('ev_chargers').update({temp_chargerID: True},
                                                                                            self.idToken)
@@ -1277,7 +1295,7 @@ class FirebaseMethods:
                         try:
                             # Todo: make sure this is what we want - especially if we are in the middle of charging
                             self.db.child('users').child(self.uid).child('evc_inputs').child(temp_chargerID).update(
-                                {'alive': False})
+                                {'alive': False}, self.idToken)
                         except OSError:
                             print('evc_inputs alive false timeout')
                             self.handle_internet_check()
@@ -1404,8 +1422,9 @@ class FirebaseMethods:
                         ))
 
                         # Reset the update_firmware values in Firebase
-                        self.db.child("users").child(self.uid).child('evc_inputs/update_firmware').remove()
-                        self.db.child("users").child(self.uid).child('evc_inputs/temp_remote_fw_update_info').remove()
+                        self.db.child("users").child(self.uid).child('evc_inputs/update_firmware').remove(self.idToken)
+                        self.db.child("users").child(self.uid).child('evc_inputs/temp_remote_fw_update_info').remove(
+                            self.idToken)
 
                     except OSError as e:
                         print('Update Firmware time out', e)
@@ -1419,7 +1438,7 @@ class FirebaseMethods:
                     self.db.child("users").child(self.uid).child('evc_inputs/temp_remote_fw_update_info').update({
                         'chargerID': temp_chargerID,
                         'firmware_update_status': fw_status
-                    })
+                    }, self.idToken)
                 except OSError:
                     print('Firmware update status notification time out')
                     self.handle_internet_check()
@@ -1427,7 +1446,8 @@ class FirebaseMethods:
             elif new[0] == "dsc_firmware_update":
                 print('got a dsc firmware update in info bus')
                 # First delete the entry
-                self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove()
+                self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove(
+                    self.idToken)
 
                 # If the payload on dsc_firmware_update is True, then we send a command to the launcher to run an update
                 if new[1]:
@@ -1456,14 +1476,16 @@ class FirebaseMethods:
                         os.remove('/home/pi/deltasolarcharger/data/charging_logs/' + charger_id)
 
                     # Remove the charger ID from Firebase
-                    self.db.child('users').child(self.uid).child("evc_inputs").child(charger_id).remove()
+                    self.db.child('users').child(self.uid).child("evc_inputs").child(charger_id).remove(self.idToken)
                     self.db.child('users').child(self.uid).child("evc_inputs").child('charging').child(
-                        charger_id).remove()
-                    self.db.child('users').child(self.uid).child("ev_chargers").child(charger_id).remove()
-                    self.db.child('users').child(self.uid).child("charging_history").child(charger_id).remove()
-                    self.db.child('users').child(self.uid).child("charging_history_keys").child(charger_id).remove()
+                        charger_id).remove(self.idToken)
+                    self.db.child('users').child(self.uid).child("ev_chargers").child(charger_id).remove(self.idToken)
+                    self.db.child('users').child(self.uid).child("charging_history").child(charger_id).remove(
+                        self.idToken)
+                    self.db.child('users').child(self.uid).child("charging_history_keys").child(charger_id).remove(
+                        self.idToken)
                     self.db.child('users').child(self.uid).child("analytics").child('charging_history_analytics').child(
-                        charger_id).remove()
+                        charger_id).remove(self.idToken)
 
                     # Now remove the charging logs folder from the FTP server
                     with FTP(host=self._FTP_HOST) as ftp:
@@ -1481,7 +1503,8 @@ class FirebaseMethods:
                             ftp.rmd("/EVCS_portal/logs/" + self.uid + '/charging_logs/' + charger_id)
 
                     # Finally delete the delete charger command
-                    self.db.child('users').child(self.uid).child("evc_inputs").child("delete_charger").remove()
+                    self.db.child('users').child(self.uid).child("evc_inputs").child("delete_charger").remove(
+                        self.idToken)
 
             elif new[0] == "factory_reset":
                 # If the payload on dsc_firmware_update is True, then we send a command to the launcher to run an update
@@ -1502,10 +1525,37 @@ class FirebaseMethods:
                             self.factory_reset_ws.start()
 
                     # First delete the entry
-                    self.db.child('users').child(self.uid).child("evc_inputs").child("factory_reset").remove()
+                    self.db.child('users').child(self.uid).child("evc_inputs").child("factory_reset").remove(
+                        self.idToken)
 
                     # Now delete the whole user node
-                    # self.db.child('users').child(self.uid).remove()
+                    # self.db.child('users').child(self.uid).remove(self.idToken)
+
+            elif new[0] == "manual_charge_control":
+                manual_charge_rate = new[1]['charge_rate']
+                manual_charge_charger_id = new[1]['chargerID']
+
+                if manual_charge_rate == 0:
+                    print('Our manual charge rate is 0, turning manual charge control off')
+                    self._MANUAL_CHARGE_CONTROL = False
+
+                else:
+                    self._MANUAL_CHARGE_CONTROL = True
+
+                    # We need to check if the charger ID is in our status list
+                    if manual_charge_charger_id in self._charger_status_list:
+                        try:
+                            print("We have a new manual charge rate!", manual_charge_rate)
+
+                            unique_id = random.randint(0, 10000)
+                            self.ocpp_ws.send(json.dumps(
+                                {'uniqueID': unique_id, 'chargerID': new[1]['chargerID'],
+                                 'purpose': 'charge_rate',
+                                 'charge_rate': manual_charge_rate}))
+
+                        except ConnectionRefusedError as e:
+                            print(e, 'got a connection refused error')
+                            pass
 
             elif new[0] == "misc_command":
                 data = new[1]
@@ -1525,7 +1575,7 @@ class FirebaseMethods:
                         print(e, 'got a connection refused error')
                         pass
 
-                self.db.child("users").child(self.uid).child('evc_inputs/misc_command').remove()
+                self.db.child("users").child(self.uid).child('evc_inputs/misc_command').remove(self.idToken)
 
         except Empty:
             pass
@@ -1566,9 +1616,9 @@ class FirebaseMethods:
 
             # Delete our Firebase history key
             self.db.child("users").child(self.uid).child('charging_history_keys').child(charger_id).child(
-                charge_date).child(charge_time).remove()
+                charge_date).child(charge_time).remove(self.idToken)
             self.db.child("users").child(self.uid).child('analytics').child('charging_history_analytics').child(
-                charger_id).child(charge_date).child(charge_time).remove()
+                charger_id).child(charge_date).child(charge_time).remove(self.idToken)
 
     def perform_file_integrity_check(self, full_check=True):
         self.handle_charging_database(full_check)
@@ -1698,12 +1748,12 @@ class FirebaseMethods:
 
                                 # Remove the charging history key
                                 self.db.child("users").child(self.uid).child("charging_history_keys").child(
-                                    charger_id).child(date).child(charging_time).remove()
+                                    charger_id).child(date).child(charging_time).remove(self.idToken)
 
                                 # Remove the charging history analytic entry (if there is one)
                                 self.db.child("users").child(self.uid).child('analytics').child(
                                     'charging_history_analytics').child(charger_id).child(date).child(
-                                    charging_time).remove()
+                                    charging_time).remove(self.idToken)
 
                 ########################################################################################################
                 # Now make sure that Firebase charging_history_keys contains all the charge sessions stored locally
@@ -1866,7 +1916,8 @@ class FirebaseMethods:
             if (firebase_csv_name + '.csv' not in local_csv_list) and firebase_csv_name != datetime.now().strftime(
                     "%Y-%m-%d"):
                 print('I cant find ' + firebase_csv_name + "in", local_csv_list, 'remove it from Firebase')
-                self.db.child("users").child(self.uid).child("history_keys").child(firebase_csv_name).remove()
+                self.db.child("users").child(self.uid).child("history_keys").child(firebase_csv_name).remove(
+                    self.idToken)
 
         ################################################################################################################
         # Go through all of the csv files in our local folder and check if there is an entry in Firebase
@@ -1881,13 +1932,14 @@ class FirebaseMethods:
         # Finally we need to remove history from 2 days ago to save space
         ################################################################################################################
         firebase_csv_name = (datetime.now() - timedelta(2)).strftime("%Y-%m-%d")
-        self.db.child("users").child(self.uid).child("history").child(firebase_csv_name).remove()
+        self.db.child("users").child(self.uid).child("history").child(firebase_csv_name).remove(self.idToken)
 
         # # Finally we need to delete the unnecessary entries in history to save space
         # for firebase_csv_name in firebase_csv_list:
         #     print('Checking:', firebase_csv_name, 'from history')
         #     if firebase_csv_name != datetime.now().strftime("%Y-%m-%d"):
-        #         self.db.child("users").child(self.uid).child("history").child(firebase_csv_name).remove()
+        #         self.db.child("users").child(self.uid).child("history").child(firebase_csv_name).remove(self.idToken
+        #         )
         #     else:
         #         print(firebase_csv_name, 'it is today, dont need to delete')
 
@@ -2011,7 +2063,7 @@ class FirebaseMethods:
             if self._ONLINE:
                 try:
                     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').update(
-                        {'single_charging_mode': new_charge_mode})
+                        {'single_charging_mode': new_charge_mode}, self.idToken)
                     print('Updated charge mode in Firebase - check if web interface is showing this change')
                 except OSError:
                     print('update_firebase update charge mode timed out')
