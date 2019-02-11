@@ -396,6 +396,12 @@ def main():
     except AttributeError as e:
         print(e)
     try:
+        print('Closing manual charge control listener from main')
+        firebasecommunications_process.manual_charge_control_listener.close()
+        firebasecommunications_process.manual_charge_control_listener = None
+    except AttributeError as e:
+        print(e)
+    try:
         print('Closing misc listener listener from main')
         firebasecommunications_process.misc_listener.close()
         firebasecommunications_process.misc_listener = None

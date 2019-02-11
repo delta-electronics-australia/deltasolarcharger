@@ -76,6 +76,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         elif action == "ChangeConfiguration":
             return response_database.ChangeConfiguration(optional)
 
+        elif action == "ClearChargingProfile":
+            return response_database.ClearChargingProfile(optional)
+
         elif action == "DiagnosticsStatusNotification":
             return response_database.DiagnosticsStatusNotification()
 
@@ -84,6 +87,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 json.dumps({"fw_status": self.decoded_message[3]['status'], "chargerID": self._CHARGER_ID}))
 
             return response_database.FirmwareStatusNotification()
+
+        elif action == "GetCompositeSchedule":
+            return response_database.GetCompositeSchedule(optional)
 
         elif action == "GetConfiguration":
             return response_database.GetConfiguration(optional)
@@ -146,6 +152,11 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             return response_database.SendLocalList()
 
         elif action == "SetChargingProfile":
+            if optional is True:
+                print('\nSending a TxDefaultProfile message from', self.charger_id, '\n')
+            else:
+                print('\nSending a TxProfile message from', self.charger_id, 'with charge rate', self.charge_rate, '\n')
+
             return response_database.SetChargingProfile(self.charge_rate, initialize=optional,
                                                         transaction_id=self.transaction_id)
 
@@ -239,6 +250,10 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                                  "meterValue": self.meter_value, "chargerID": self._CHARGER_ID,
                                  "transaction_id": self.transaction_id}))
 
+                        # Now send a message to change the default profile to 6A
+                        payload = self.lookup_action_database('SetChargingProfile', optional=True)
+                        self.write_message(json.dumps([2, str(543543), 'SetChargingProfile', payload]))
+
                 elif self.decoded_message[3]['status'] == "Preparing":
                     self._isCharging = 'plugged'
                     if self.data_handler[0]:
@@ -252,12 +267,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     if self.authentication_required is False:
                         print('No authentication is required so start charging immediately')
                         self.control_remote_charging('start')
-
-                    # # Now we have to send a message to change the charge rate
-                    # payload = self.lookup_action_database('SetChargingProfile', optional=True)
-                    # self.write_message(json.dumps([2, str(10239459), 'SetChargingProfile', payload]))
-                    # print('Preparing status... charge rate sent out',
-                    #       json.dumps([2, str(10239459), 'SetChargingProfile', payload]))
 
                 elif self.decoded_message[3]['status'] == "Faulted":
                     # Todo: Maybe we have to send a fault
@@ -288,13 +297,13 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
             # If the received StopTransaction message is not live then we take the timestamp from the message
             if timestamp_delta.seconds > 120:
-                print('Our StopTransaction message is not live! Send the timestamp from the message')
+                print('\nOur StopTransaction message is not live! Send the timestamp from the message \n')
                 timestamp = self.decoded_message[3]["timestamp"]
                 timestamp = timestamp.split('T')[0] + ' ' + timestamp.split('T')[1][0:5].replace(':', '')
 
             # If the received StopTransaction message IS live then we take the current time as the timestamp
             else:
-                print('Our StopTransaction message is live! Sending the current server timestamp')
+                print('\nOur StopTransaction message is live! Sending the current server timestamp\n')
                 timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H%M')
 
             # Make the class timestamp for this charger None (since we're not charging anymore)
@@ -597,9 +606,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         if messagetypeid == 2:
             action = follow_up_payload
 
-            if action == "Heartbeat" and not self._isCharging:
-                payload = self.lookup_action_database('SetChargingProfile', optional=True)
-                self.write_message(json.dumps([2, str(543543), 'SetChargingProfile', payload]))
+            # if action == "Heartbeat" and not self._isCharging:
+            #     payload = self.lookup_action_database('SetChargingProfile', optional=True)
+            #     self.write_message(json.dumps([2, str(543543), 'SetChargingProfile', payload]))
 
             # Send a message to the EVCS that we are alive
             if self.data_handler[0]:
@@ -690,6 +699,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.decoded_message = None
         self.charge_rate_queue = deque()
 
+        self.charger_id = self.request.path.split('/')[-1]
         self.new_charger_info = None
         self.charging_timestamp = None
         self.meter_value = None

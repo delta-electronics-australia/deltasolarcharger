@@ -26,12 +26,20 @@ def ChangeConfiguration(payload):
     #         }
 
 
+def ClearChargingProfile(payload):
+    return payload
+
+
 def DiagnosticsStatusNotification():
     return {}
 
 
 def FirmwareStatusNotification():
     return {}
+
+
+def GetCompositeSchedule(payload):
+    return payload
 
 
 def GetConfiguration(payload):
@@ -65,21 +73,21 @@ def RemoteStartTransaction():
     return {
         'connectorId': 1,
         'idTag': '0498ECCA704880',
-        'chargingProfile': {
-            'chargingProfileId': 1,
-            'stackLevel': 0,
-            'chargingProfilePurpose': 'TxProfile',
-            'chargingProfileKind': 'Absolute',
-            'chargingSchedule': {
-                'chargingRateUnit': 'A',
-                'ChargingSchedulePeriod': {
-                    'startPeriod': 1,
-                    # Todo: edit this limit to have the live charge rate
-                    'limit': 6
-
-                }
-            }
-        }
+        # 'chargingProfile': {
+        #     'chargingProfileId': 1,
+        #     'stackLevel': 2,
+        #     'chargingProfilePurpose': 'TxProfile',
+        #     'chargingProfileKind': 'Absolute',
+        #     'chargingSchedule': {
+        #         'chargingRateUnit': 'A',
+        #         'ChargingSchedulePeriod': {
+        #             'startPeriod': 0,
+        #             # Todo: edit this limit to have the live charge rate
+        #             'limit': 16
+        #
+        #         }
+        #     }
+        # }
     }
 
 
@@ -176,24 +184,23 @@ def SetChargingProfile(charge_rate, initialize, transaction_id):
     # Initialize specifies whether or not we are setting the default profile outside of transaction or in a transaction
     # If initialize is True, then we are setting the default profile OUTSIDE of transaction
     if initialize:
-        print('Changing charge rate to', charge_rate)
-        # Todo: revert back to 6 if testing fails
-
         return {
-            'connectorId': 0,
+            'connectorId': 1,
             'csChargingProfiles': {
-                'chargingProfileId': 1,
+                'chargingProfileId': 2,
                 'stackLevel': 0,
                 'chargingProfilePurpose': 'TxDefaultProfile',
                 'chargingProfileKind': 'Recurring',
                 'recurrencyKind': 'Daily',
                 'chargingSchedule': {
+                    'duration': 86400,
+                    # 'startSchedule': '2019-02-11T10:54Z',
                     'chargingRateUnit': 'A',
-                    'ChargingSchedulePeriod': {
+                    'chargingSchedulePeriod': {
                         'startPeriod': 0,
-                        'limit': charge_rate
+                        'limit': 6
+                        # 'numberPhases': 1
                     }
-
                 }
             }
         }
@@ -209,7 +216,7 @@ def SetChargingProfile(charge_rate, initialize, transaction_id):
                 'recurrencyKind': 'Daily',
                 'chargingSchedule': {
                     'chargingRateUnit': 'A',
-                    'ChargingSchedulePeriod': {
+                    'chargingSchedulePeriod': {
                         'startPeriod': 0,
                         'limit': charge_rate
                     }
@@ -217,6 +224,7 @@ def SetChargingProfile(charge_rate, initialize, transaction_id):
                 }
             }
         }
+
 
 def StartTransaction(transaction_id):
     return {'idTagInfo': {'status': 'Accepted'},

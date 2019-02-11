@@ -45,7 +45,7 @@ def authenticate():
 
     db = firebase.database(timeout_length=2)
 
-# Send a package to update DCWB firmware
+    # Send a package to update DCWB firmware
     # db.child("users").child(uid).child('evc_inputs').update({
     #     "update_firmware": {
     #         'chargerID': "MEL-DCWB",
@@ -57,13 +57,12 @@ def authenticate():
     # # Send a package to update ACMP firmware
     # db.child("users").child(uid).child('evc_inputs').update({
     #     "update_firmware": {
-    #         'chargerID': "MEL-ACMP",
+    #         'chargerID': "MEL-ACMP-WIFI",
     #         'firmwareType': 'FileSystem',
     #         'set': True,
     #         'fw_url': 'ftp://203.32.104.46/Delta_FW_FTP/ACMP/beta/v2.09.02/DcoFImage'
     #     }
     # })
-
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).child('evc_inputs').update({
@@ -81,13 +80,40 @@ def authenticate():
         db.child("users").child(uid).child('evc_inputs').update({
             "misc_command": {
                 'chargerID': "CSIRO-ACMP4",
-                'action': 'TriggerMessage',
-                'misc_data': 'BootNotification'
+                'action': 'GetCompositeSchedule',
+                'misc_data': {'connectorId': 1, 'duration': 180, 'chargingRateUnit': 'A'}
             }
-        })
-    except OSError:
+        }, idToken)
+    except OSError as e:
+        print(e)
         print('got an OSerror')
         pass
+
+    # try:
+    #     # Send a package to send a misc command - LEGIT
+    #     db.child("users").child(uid).child('evc_inputs').update({
+    #         "misc_command": {
+    #             'chargerID': "CSIRO-ACMP4",
+    #             'action': 'SetChargingProfile',
+    #             'misc_data': True
+    #         }
+    #     }, idToken)
+    # except OSError as e:
+    #     print(e)
+    #     print('got an OSerror')
+    #     pass
+
+    # try:
+    #     # Send a package to send a misc command - LEGIT
+    #     db.child("users").child(uid).child('evc_inputs').update({
+    #         "manual_charge_control": {
+    #             'chargerID': "MEL-ACMP",
+    #             'charge_rate': 0
+    #         }
+    #     }, idToken)
+    # except OSError:
+    #     print('got an OSerror')
+    #     pass
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).update({
