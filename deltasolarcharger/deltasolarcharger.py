@@ -150,6 +150,7 @@ class FirebaseCommunications(FirebaseMethods, Process):
             try:
                 if not self.analyse_to_firebase_queue.empty():
                     data_from_analyse = self.analyse_to_firebase_queue.get()
+
                     # If the data from analyze is a charging mode, then we have to update charge mode, not charge rate
                     if data_from_analyse in ['MAX_CHARGE_GRID', 'MAX_CHARGE_STANDALONE', 'PV_no_BT', 'PV_with_BT']:
                         self.update_firebase(['update_charge_mode', data_from_analyse])

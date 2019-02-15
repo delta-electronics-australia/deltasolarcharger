@@ -7,11 +7,11 @@ import random
 import sqlite3
 import time
 import requests
-from collections import OrderedDict
 from datetime import datetime, timedelta
 from ftplib import FTP, error_perm
 from multiprocessing import Manager
 from queue import Empty
+from collections import deque
 from threading import Timer, Thread
 
 import pyrebase
@@ -241,7 +241,6 @@ class FirebaseMethods:
 
         # Define a variable to save our MODBUS data
         self.latest_modbus_data = dict()
-        self.latest_firebase_data = dict()
 
         # Define the current selected charging mode (should be the same as analyzemethods variable)
         self._CHARGING_MODE = 'PV_with_BT'
@@ -274,6 +273,9 @@ class FirebaseMethods:
         self.information_bus = self.information_manager.Queue()
         self.charger_status_information_bus = Manager().Queue()
         self.ws_receiver_stopped_event = self.information_manager.Event()
+
+        # Define a queue that will be used to pass the latest MODBUS data to other threads within FirebaseMethods
+        self.modbus_data_queue = deque(maxlen=10)
 
         # Define our FTP parameters
         self._FTP_HOST = "203.32.104.46"
@@ -919,6 +921,7 @@ class FirebaseMethods:
 
     def respond_to_authorize(self, chargerID):
         """ This function is called when RFID mode is on and user swipes RFID card """
+
         print('We are now in respond to authorize', chargerID)
 
         counter = 0
@@ -943,6 +946,23 @@ class FirebaseMethods:
 
             time.sleep(0.5)
 
+        # Make sure we are grid connected if we have more than 1 active charger
+        num_active_chargers = 0
+        for chargerID, payload in self._charger_status_list.items():
+            if payload['charging']:
+                num_active_chargers += 1
+
+        # Now get the current inverter operation mode
+        latest_modbus_data = self.modbus_data_queue.pop()
+
+        # If we are in standalone mode with more than 1 active charger, then we reject the incoming charge session
+        if num_active_chargers > 1 and latest_modbus_data['inverter_data']['Inverter Status'] == "Stand Alone":
+            print('We have more than one active charger but we are in standalone mode - denying the charge session')
+            self.ocpp_ws.send(
+                json.dumps({'chargerID': chargerID, 'purpose': 'authorize_request', 'authorized': False}))
+            return
+
+        # But if we are grid connected then we continue with monitoring the charge rate
         counter = 0
         while True:
             print('Available current is:', self._AVAILABLE_CURRENT, 'current needed is:', target_charge_rate)
@@ -1965,10 +1985,14 @@ class FirebaseMethods:
 
         if label == "modbus_data":
             # Get the modbus data, condition it so it matches our live database and history structure
+            # firebase_ready_data has more data than history_ready_data!!
             (firebase_ready_data, history_ready_data) = self.condition_data(payload)
 
+            # latest_modbus_data is used for logging and firebase purposes
             self.latest_modbus_data = history_ready_data
-            self.latest_firebase_data = firebase_ready_data
+
+            # Put our latest modbus data on to the queue for other threads in FirebaseMethods
+            self.modbus_data_queue.append(firebase_ready_data)
 
             # We log everytime log_counter reaches log_counter_max
             if self.log_counter == self.log_counter_max:

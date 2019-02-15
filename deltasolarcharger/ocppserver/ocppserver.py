@@ -407,7 +407,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
         self.authorize_response_decision = None
 
-        print('We are in the charging firewall 2 with uniqueID:', unique_id)
+        print('We are in the charging firewall with uniqueID:', unique_id)
 
         if self.data_handler[0]:
             try:

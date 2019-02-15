@@ -480,7 +480,9 @@ class AnalyseMethods:
 
                 # First make sure that we are in a grid connected mode
                 if inverter_status == "Stand Alone":
-                    final_charge_rate = self._MAX_STANDALONE_CURRENT
+
+                    # Return a new charging mode straight away
+                    return 'MAX_CHARGE_STANDALONE'
 
                 else:
                     final_charge_rate = self._MAX_GRID_CONNECTED_CURRENT
@@ -797,7 +799,13 @@ class AnalyseMethods:
             self.check_and_change_inverter_op_mode(data['inverter_op_mode'], 'SELF_CONSUMPTION_MODE_INTERNAL')
 
             if self._CHARGING_MODE == "MAX_CHARGE_GRID":
-                available_current = 27
+
+                # If we are in stand alone mode and we have chosen max charge grid, then we need to change the mode to
+                # max charge standalone
+                if inverter_status == "Stand Alone":
+                    return "MAX_CHARGE_STANDALONE"
+                else:
+                    available_current = 27
 
             elif self._CHARGING_MODE == "MAX_CHARGE_STANDALONE":
                 # If the battery SOC is greater than 10%, then we can rely on the battery again
