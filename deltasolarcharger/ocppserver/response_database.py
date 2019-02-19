@@ -49,7 +49,7 @@ def GetConfiguration(payload):
 
 def GetDiagnostics():
     return {'location': 'ftp://getdiagnostics:12345@203.32.104.46/Diagnostic_Test/'}
-    # return {'location': 'ftp://203.32.104.46/test'}
+    # return {'location': 'ftp://203.32.104.46/Diagnostic_Test/'}
 
 
 def GetLocalListVersion():

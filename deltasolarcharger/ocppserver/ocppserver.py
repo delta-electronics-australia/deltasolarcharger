@@ -423,6 +423,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
                     # If we reach 20 seconds and there is no response, then we reject the charging session
                     if counter == 40:
+                        print('Our authorization request has timed out (20 seconds has passed)')
                         self.authorize_response_decision = False
                         break
 
@@ -494,7 +495,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             yield gen.sleep(0.3)
 
     def authorize_response_returned(self, authorized):
-        print('Im in authorize response received!')
+        print('Im in authorize response received!', self)
         self.authorize_response_decision = authorized
 
     def change_authentication_requirement(self, authentication_required):
@@ -803,7 +804,7 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
                      'meterValue': meter_value, "transaction_id": transaction_id, "chargerID": client[1]}))
 
     def initialize(self, ws_clients_obj):
-        print('In OCPPDataHandler initialize!')
+        print('In OCPPDataHandler initialize!\n')
         # self.ws_clients_obj = ws_clients_obj
 
         # Define self.ws_clients to be a reference to the set of ws clients in ws_clients_obj that is shared
@@ -811,7 +812,9 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
         ws_clients_obj.data_handler.clear()
         ws_clients_obj.data_handler.append(self)
 
-        print('ws_clients_obj in initialize is', ws_clients_obj.data_handler, self.ws_clients)
+        print('ws_clients_obj in initialize. Data handler is:', ws_clients_obj.data_handler)
+        for client in self.ws_clients:
+            print(client)
 
     def open(self):
         print('OCPP Data Handler open', datetime.now())
@@ -827,6 +830,8 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
             self.synchronise_data(message)
 
         elif message['purpose'] == "authorize_request":
+            print('Got an authorize request in OCPP for charger ID', message['chargerID'])
+
             for client in self.ws_clients:
                 if client[1] == message['chargerID']:
                     client[0].authorize_response_returned(message['authorized'])

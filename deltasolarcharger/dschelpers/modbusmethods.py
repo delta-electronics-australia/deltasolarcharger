@@ -17,7 +17,6 @@ class ModbusMethods:
 
         self.initiate_parameters(1, 5)
 
-
     def initiate_parameters(self, e5_id, dpm_id):
         self.E5 = minimalmodbus.Instrument('/dev/serial0', e5_id)  # port name, slave address (in decimal)
         self.E5.debug = False
@@ -270,4 +269,3 @@ if __name__ == '__main__':
         except ValueError as e:
             print(e)
             modbus_methods = ModbusMethods(Queue())
-

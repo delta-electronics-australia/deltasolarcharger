@@ -800,6 +800,12 @@ class FirebaseMethods:
         except AttributeError as e:
             print(e)
         try:
+            # print('manual control listener before closing:', self.misc_listener)
+            self.manual_charge_control_listener.close()
+            # print('manual control listener after closing:', self.misc_listener)
+        except AttributeError as e:
+            print(e)
+        try:
             # print('misc listener before closing:', self.misc_listener)
             self.misc_listener.close()
             # print('misc listener after closing:', self.misc_listener)
@@ -948,7 +954,7 @@ class FirebaseMethods:
 
         # Make sure we are grid connected if we have more than 1 active charger
         num_active_chargers = 0
-        for chargerID, payload in self._charger_status_list.items():
+        for temp_chargerID, payload in self._charger_status_list.items():
             if payload['charging']:
                 num_active_chargers += 1
 
@@ -974,6 +980,8 @@ class FirebaseMethods:
                 # If we have enough, then we can send a message to OCPP server to accept the authorize request
                 self.ocpp_ws.send(
                     json.dumps({'chargerID': chargerID, 'purpose': 'authorize_request', 'authorized': True}))
+
+                print('Just sent out the message to authorize the charging session!')
 
                 break
 
