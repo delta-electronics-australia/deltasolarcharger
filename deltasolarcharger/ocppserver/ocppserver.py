@@ -356,22 +356,26 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 if optional['firmwareType'] == "Aux_Power_Admin":
                     print('Updating Aux Power')
                     return response_database.UpdateFirmware(
-                        location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Aux_Power/v4.04/5505604234')
+                        # location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Aux_Power/v4.04/5505604234')
+                        location=optional['fw_url'])
 
                 elif optional['firmwareType'] == "BA_Dual_Admin":
                     print('Updating BA Dual Admin')
                     return response_database.UpdateFirmware(
-                        location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Control_Unit_Dual_Output/vA1.36/5505604248F')
+                        # location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Control_Unit_Dual_Output/vA1.36/5505604248F')
+                        location=optional['fw_url'])
 
                 elif optional['firmwareType'] == "BA_Single_Admin":
                     print('Updating BA Single Admin')
                     return response_database.UpdateFirmware(
-                        location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Control_Unit_Single_Output/vA1.36/5505604248F')
+                        # location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Control_Unit_Single_Output/vA1.36/5505604248F')
+                        location=optional['fw_url'])
 
                 elif optional['firmwareType'] == "RCB_Admin":
                     print('Updating RCB')
                     return response_database.UpdateFirmware(
-                        location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Relay_Control_Board/v4/5505604240')
+                        # location='ftp://203.32.104.46/Delta_FW_FTP/DCWB/admin/EU/Relay_Control_Board/v4/5505604240')
+                        location=optional['fw_url'])
 
                 elif optional['firmwareType'] == "Aux_Power":
                     print('Updating Aux Power')
@@ -495,7 +499,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             yield gen.sleep(0.3)
 
     def authorize_response_returned(self, authorized):
-        print('Im in authorize response received!', self)
+        print('Im in authorize response received!')
         self.authorize_response_decision = authorized
 
     def change_authentication_requirement(self, authentication_required):
