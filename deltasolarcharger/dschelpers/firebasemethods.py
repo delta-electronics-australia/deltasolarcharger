@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from ftplib import FTP, error_perm
 from multiprocessing import Manager
 from queue import Empty
-from collections import deque
+from collections import deque, OrderedDict
 from threading import Timer, Thread
 
 import pyrebase
@@ -378,8 +378,6 @@ class FirebaseMethods:
             self.internet_checker_thread.daemon = True
             self.internet_checker_thread.start()
 
-        print('Handled internet check')
-
     @staticmethod
     def condition_data(modbus_data):
         # The structure of modbus_data is: # (inverter_data, bt_data, dpm_data)
@@ -719,7 +717,6 @@ class FirebaseMethods:
             self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').update(
                 {'single_charging_mode': "MAX_CHARGE_GRID", 'authentication_required': True},
                 self.idToken)
-
 
         # Make all of our chargers offline, we will use Heartbeats to get them online
         if self.db.child("users").child(self.uid).child('ev_chargers').get(self.idToken).val() is not None:
@@ -1755,9 +1752,20 @@ class FirebaseMethods:
                 if full_check:
                     final_firebase_charging_history_keys_payload = firebase_charging_history_keys_payload
                 else:
-                    final_firebase_charging_history_keys_payload = self.db.child("users").child(self.uid).child(
-                        "charging_history_keys").child(charger_id).order_by_key().limit_to_last(5).get(
-                        self.idToken).val()
+                    # final_firebase_charging_history_keys_payload = self.db.child("users").child(self.uid).child(
+                    #     "charging_history_keys").child(charger_id).order_by_value().limit_to_last(5).get(
+                    #     self.idToken).val()
+
+                    final_firebase_charging_history_keys_payload = OrderedDict(list(
+                        OrderedDict(sorted(firebase_charging_history_keys_payload.items(), key=lambda item: item[0],
+                                           reverse=True)).items())[0:5])
+
+                    # print(final_firebase_charging_history_keys_payload)
+                    # if firebase_charging_history_keys_payload:
+                    #     final_firebase_charging_history_keys_payload = OrderedDict(
+                    #         list(firebase_charging_history_keys_payload.items())[-5:])
+                    # else:
+                    #     final_firebase_charging_history_keys_payload = firebase_charging_history_keys_payload
 
                 # If a payload exists then we can go through the dates and extract the individual charging times
                 if final_firebase_charging_history_keys_payload:
@@ -1816,6 +1824,49 @@ class FirebaseMethods:
                 # Now make sure that Firebase charging_history_analytics contains analytics for every session in keys
                 ########################################################################################################
 
+    @staticmethod
+    def analyze_csv_integrity(csv_filename):
+        """ This function analyzes the csv file and makes sure that there are no NULL bytes """
+
+        def fix_nulls(s):
+            """ This function takes a generator that replaces NULL bytes with blank """
+            for line in s:
+                yield line.replace('\0', '')
+
+        try:
+            fixed_csv_list = None
+
+            with open('../data/logs/' + csv_filename) as csvfile:
+                if '\0' in csvfile.read():
+                    print('We found a null byte, lets fix it')
+
+                    # Reset our csv iterator
+                    csvfile.seek(0)
+
+                    # Remove the NULL bytes from the csv file
+                    fixed_csv = csv.reader(fix_nulls(csvfile))
+                    fixed_csv_list = list()
+
+                    # Now save the rows to a list
+                    for row in fixed_csv:
+                        fixed_csv_list.append(row)
+
+            # If a list exists then we know that there was something wrong so we need to rewrite the csv file
+            if fixed_csv_list:
+                # Open the corrupt csv
+                with open('../data/logs/' + csv_filename, mode='w', newline='') as f:
+                    writer = csv.writer(f)
+
+                    # Write the uncorrupt rows to it and replace the file
+                    for row in fixed_csv_list:
+                        if len(row) != 0:
+                            writer.writerow(row)
+
+                print('Fixed the csv file!!')
+
+        except FileNotFoundError as e:
+            print('File doesnt exist! Skipping integrity check')
+
     def handle_inverter_database(self, full_check=True):
         """ This ensures that all of the local csv files are in the FTP server """
         print('\nChecking our inverter_logs database now...')
@@ -1834,17 +1885,23 @@ class FirebaseMethods:
         sorted_local_csv_list = sorted(local_csv_list, reverse=True)
 
         # Loop through the last 3 days
-        for filename in sorted_local_csv_list[:2]:
+        for filename in sorted_local_csv_list[0:4]:
 
-            # Open the file and count the number of rows in each file
-            with open('../data/logs/' + filename) as f:
-                csv_reader = csv.reader(f)
-                row_count = sum(1 for row in csv_reader)
+            # Make sure we are not looking at today's csv file
+            if filename != datetime.now().strftime("%Y-%m-%d"):
 
-                # Files with only one row don't have any data, so we need to delete inverter history file
-                if row_count == 1:
-                    print(filename, 'only has one row. We need to delete the csv file')
-                    os.remove('../data/logs/' + filename)
+                # Look for NULL bytes and fix them
+                self.analyze_csv_integrity(filename)
+
+                # Open the file and count the number of rows in each file
+                with open('../data/logs/' + filename) as f:
+                    csv_reader = csv.reader(f)
+                    row_count = sum(1 for row in csv_reader)
+
+                    # Files with only one row don't have any data, so we need to delete inverter history file
+                    if row_count == 1:
+                        print(filename, 'only has one row. We need to delete the csv file')
+                        os.remove('../data/logs/' + filename)
 
         # Refresh our list of the .csv files in the local directory
         local_csv_list = os.listdir('../data/logs/')

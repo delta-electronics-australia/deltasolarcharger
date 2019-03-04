@@ -54,15 +54,15 @@ def authenticate():
     #     }
     # })
 
-    # Send a package to update ACMP firmware
-    db.child("users").child(uid).child('evc_inputs').update({
-        "update_firmware": {
-            'chargerID': "MEL-ACMP-WIFI2",
-            'firmwareType': 'FileSystem_Admin',
-            'set': True,
-            'fw_url': 'ftp://203.32.104.46/Delta_FW_FTP/ACMP/beta/v2.09.02/DcoFImage'
-        }
-    }, idToken)
+    # # Send a package to update ACMP firmware
+    # db.child("users").child(uid).child('evc_inputs').update({
+    #     "update_firmware": {
+    #         'chargerID': "MEL-ACMP-WIFI2",
+    #         'firmwareType': 'FileSystem_Admin',
+    #         'set': True,
+    #         'fw_url': 'ftp://203.32.104.46/Delta_FW_FTP/ACMP/beta/v2.09.02/DcoFImage'
+    #     }
+    # }, idToken)
 
     # # Send a package to send a misc command
     # db.child("users").child(uid).child('evc_inputs').update({
@@ -80,7 +80,7 @@ def authenticate():
     #     # Send a package to send a misc command - LEGIT
     #     db.child("users").child(uid).child('evc_inputs').update({
     #         "misc_command": {
-    #             'chargerID': "MEL-ACMP-WIFI2",
+    #             'chargerID': "CSIRO-ACMP4",
     #             'action': 'GetCompositeSchedule',
     #             'misc_data': {'connectorId': 1, 'duration': 180, 'chargingRateUnit': 'A'}
     #         }
@@ -90,19 +90,19 @@ def authenticate():
     #     print('got an OSerror')
     #     pass
 
-    # try:
-    #     # Send a package to send a misc command - LEGIT
-    #     db.child("users").child(uid).child('evc_inputs').update({
-    #         "misc_command": {
-    #             'chargerID': "MEL-ACMP-WIFI",
-    #             'action': 'RemoteStartTransaction',
-    #             'misc_data': True
-    #         }
-    #     }, idToken)
-    # except OSError as e:
-    #     print(e)
-    #     print('got an OSerror')
-    #     pass
+    try:
+        # Send a package to send a misc command - LEGIT
+        db.child("users").child(uid).child('evc_inputs').update({
+            "misc_command": {
+                'chargerID': "MEL-ACMP",
+                'action': 'RemoteStartTransaction',
+                'misc_data': True
+            }
+        }, idToken)
+    except OSError as e:
+        print(e)
+        print('got an OSerror')
+        pass
 
     # try:
     #     # Send a package to send a misc command - LEGIT
