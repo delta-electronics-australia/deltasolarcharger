@@ -10,6 +10,7 @@ import shutil
 import sys
 import time
 import requests
+import threading
 from ftplib import FTP
 from io import StringIO
 
@@ -39,13 +40,26 @@ class ConfigServer(tornado.web.Application):
     def __init__(self):
         handlers = [(r"/delta_solar_charger_initial_setup", InitialSetupHandler),
                     (r"/delta_solar_charger_software_update", SoftwareUpdateHandler),
-                    (r"/delta_solar_charger_factory_reset", FactoryResetHandler)]
+                    (r"/delta_solar_charger_factory_reset", FactoryResetHandler),
+                    (r"/delta_solar_charger_initial_setup", ConnectionMethodHandler)]
         settings = {'debug': True}
         super().__init__(handlers, **settings)
 
     def run(self):
         self.listen(5000)
         tornado.ioloop.IOLoop.instance().start()
+
+
+class ConnectionMethodHandler(tornado.web.RequestHandler):
+    def open(self):
+        print('ConnectionMethodHandler open!')
+
+    def on_message(self, message):
+        print('Received a message to change the connection method', message)
+
+        decoded_message = loads(message)
+        if decoded_message['connection_method_change']:
+            pass
 
 
 class FactoryResetHandler(tornado.websocket.WebSocketHandler):
@@ -214,10 +228,75 @@ def configure_ip_tables(selected_interface):
                       ' -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
             os.system('sudo iptables -D FORWARD -i wlan0 -o ' + interface + ' -j ACCEPT')
 
+        # Todo: add the ability to detect if eth1 or eth0 is connected
         # Now add the rules that we want
         os.system('sudo iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE')
         os.system('sudo iptables -A FORWARD -i eth1 -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
         os.system('sudo iptables -A FORWARD -i wlan0 -o eth1 -j ACCEPT')
+
+
+def internet_listener(listening_for):
+    """ This function should run in a separate thread and listens for when the internet goes on or off """
+
+    # The listening_for parameter tells the function if we are looking for an internet connection to come on or an
+    # internet connection to go offline
+
+    # If we are looking for the internet to come online
+    if listening_for == "online":
+
+        # Initialise our online counter
+        online_counter = 0
+
+        while True:
+            # If 1 minute has passed and we are still online, let's restart the DSC backend
+            if online_counter == 12:
+                kill_sc_backend()
+                os.execv(sys.executable, ['python3'] + sys.argv)
+
+            try:
+                response = requests.get("http://www.google.com")
+                print("response code: " + str(response.status_code))
+
+                online_counter += 1
+                # Test in another 5 seconds
+                time.sleep(5)
+
+            except requests.ConnectionError:
+                print("Could not connect, trying again in 5 seconds")
+
+                # Reset the online counter
+                online_counter = 0
+
+                # Test in another 5 seconds
+                time.sleep(5)
+
+    # If we are looking for the internet to go offline
+    elif listening_for == "offline":
+
+        # Initialise our offline counter
+        offline_counter = 0
+
+        while True:
+            # If 15 minutes has passed, let's restart the hardware
+            if offline_counter == 30:
+                os.system('restart')
+
+            try:
+                response = requests.get("http://www.google.com")
+                print("response code: " + str(response.status_code))
+
+                # Reset the offline counter
+                offline_counter = 0
+
+                # Test in another 5 minutes
+                time.sleep(300)
+
+            except requests.ConnectionError:
+                print("Could not connect, trying again in 30 seconds")
+                offline_counter += 1
+
+                # Test in another 30 seconds
+                time.sleep(30)
 
 
 def check_internet():
@@ -246,12 +325,25 @@ def check_internet():
             response = requests.get("http://www.google.com")
             print("response code: " + str(response.status_code))
             internet_status = True
+
+            # If we are on a 3G connection, we need to detect if we go offline. We should restart the unit if we have
+            # been offline for long enough.
+            if firebase_cred['connectionMethod'] == '3G':
+                internet_listener_thread = threading.Thread(target=internet_listener, args=('offline',))
+                internet_listener_thread.daemon = True
+                internet_listener_thread.start()
             break
 
         except requests.ConnectionError:
             print("Could not connect, trying again 3 seconds...")
             internet_status = False
             time.sleep(2)
+
+    # If we exited the loop with no internet, then we should start a listener that waits until the internet is online
+    if internet_status is False:
+        internet_listener_thread = threading.Thread(target=internet_listener, args=('online',))
+        internet_listener_thread.daemon = True
+        internet_listener_thread.start()
 
     return internet_status
 
