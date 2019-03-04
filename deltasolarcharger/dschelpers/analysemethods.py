@@ -18,12 +18,14 @@ class AnalyseMethods:
 
         # Define the default charging mode
         self._CHARGING_MODE = 'PV_with_BT'
-        self.MULTIPLE_CHARGING_MODE = "EVEN_SPLIT_with_GRID"
-        # Define the battery aggressiveness setting (only vslid for PV_with_BT)
+
+        # Define the battery aggressiveness setting (only valid for PV_with_BT)
         self._BUFFER_AGGRESSIVENESS = "Balanced"
 
+        # charger_list is a live dict of all of the chargers connected to the system
         self.charger_list = dict()
 
+        """ Basic analyze variables """
         # Define the base charge rate in Amps
         self._BASE_CHARGE_RATE = 6
         # Define the variable for the current charge rate
@@ -32,7 +34,16 @@ class AnalyseMethods:
         self._BATTERY_CHARGE_RATE = 13.5
         # Window size in seconds
         self._WINDOWSIZE = 8
+        # Initialize the 'smudge factor'
+        self._BUFFER = float()
 
+        """ Maximum current variables """
+        # Define the maximum current for standalone mode (limited by the E5)
+        self._MAX_STANDALONE_CURRENT = 27
+        # Define the maximum current for grid connected modes (limited by the E5, trips out at 28A)
+        self._MAX_GRID_CONNECTED_CURRENT = 27
+
+        """ Solar tracking variables """
         # Define the charging upper limit threshold
         self.UPPER_THRESHOLD = 0.07
         # Define the charging lower limit threshold
@@ -41,16 +52,8 @@ class AnalyseMethods:
         self._CHARGE_RATE_INCREASE = 1.05
         # Define the decline in charging rate
         self._CHARGE_RATE_DECREASE = 0.80
-        # Define the base buffer (the lowest possible buffer)
-        self._BASE_BUFFER = 0.20
-        # Define the max buffer (the highest possible buffer)
-        self._MAX_BUFFER = 0.4
 
-        # Define the maximum current for standalone mode (limited by the E5)
-        self._MAX_STANDALONE_CURRENT = 27
-        # Define the maximum current for grid connected modes (limited by the E5, trips out at 28A)
-        self._MAX_GRID_CONNECTED_CURRENT = 27
-
+        """ Temperature throttling variables """
         # Define the temperature that we should throttle our battery - derates to 25A - 2kW (8A 240V)
         self._BATTERY_TEMP_LIMIT = 43
         # Define the cooled off temperature
@@ -60,6 +63,7 @@ class AnalyseMethods:
         # Define a boolean for whether or not we are currently in a temperature throttled state
         self._TEMP_THROTTLED = False
 
+        """ BT SOC throttling variables """
         # Define the lower limit for the BT SOC
         self._BTSOC_LOWER_LIMIT = 5
         # Define the upper limit for the BT SOC
@@ -67,15 +71,13 @@ class AnalyseMethods:
         # Define a boolean for whether or not we are currently in a BT SOC throttled state
         self._BTSOC_THROTTLED = False
 
+        """ Drain mode variables """
         # Define the BT SOC that once exceeded, should trigger drain mode to activate
         self._DRAIN_MODE_UPPER_LIMIT = 98
         # Define the BT SOC that will deactivate drain mode if we go below it
         self._DRAIN_MODE_LOWER_LIMIT = 88
         # Define a boolean for whether or not we are currently in drain mode
         self._DRAIN_MODE_ACTIVATED = False
-
-        # Initialize the 'smudge factor'
-        self._BUFFER = float()
 
         # Do we want to log? Only log when we are testing standalone modes
         self._LOG = True
@@ -85,12 +87,12 @@ class AnalyseMethods:
         # Create a deque of length windowsize. Will allow us to automatically pop and insert values
         self.pv_window = deque([], self._WINDOWSIZE)
 
-        # Todo: need to find a use for this
+        # Todo: Implement load balancing when winding down
         self.charging_wind_down_dict = dict()
 
+        """ Data queues """
         # Define the queues coming into analyse process
         self.firebase_to_analyse_queue = firebase_to_analyse_queue
-
         # Define the queues going out of the analyze process
         self.analyze_to_modbus_queue = analyze_to_modbus_queue
 
@@ -161,9 +163,8 @@ class AnalyseMethods:
                      str(self._CURRENT_CHARGE_RATE), str(floor(self._CURRENT_CHARGE_RATE))
                      ])
 
-    def update_dynamic_buffer(self):
-        """ This method calculates a dynamic buffer for the charge rate """
-        # This function will calculate a dynamic buffer for the charge rate
+    def get_standalone_buffer(self):
+        """ This method calculates the buffer for the charge rate when the inverter is in standalone mode """
 
         # Take the coefficient of variance
         sd = stdev(self.pv_window)
@@ -173,45 +174,52 @@ class AnalyseMethods:
         if z == 0:
             z = 0.001
 
-        if self._BUFFER_AGGRESSIVENESS == "Aggressive":
-            self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
-                                                             np.array([47.25, 11.48708905, 0.70729386]))) / 100
-            if z > 0.1:
-                self._BUFFER = 0.25
-            # print('Aggressive buffer is', self._BUFFER)
+        _BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
+                                                    np.array([49.5, 3.56121475, -0.1886117]))) / 100
+        if z > 0.1:
+            _BUFFER = 0.40
 
-        if self._BUFFER_AGGRESSIVENESS == "Balanced":
-            self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
-                                                             np.array([49, 9.51104915, 0.47152924]))) / 100
-            if z > 0.1:
-                self._BUFFER = 0.30
-            # print('Balanced buffer is', self._BUFFER)
+        return _BUFFER
 
-        elif self._BUFFER_AGGRESSIVENESS == "Conservative":
+    def update_dynamic_buffer(self, standalone_mode=False):
+        """ This method calculates a dynamic buffer for the charge rate in PV_with_BT mode """
+
+        # Take the coefficient of variance
+        sd = stdev(self.pv_window)
+        z = sd / mean(self.pv_window)
+
+        # Add this here so we never divide by 0
+        if z == 0:
+            z = 0.001
+
+        if not standalone_mode:
+            if self._BUFFER_AGGRESSIVENESS == "Aggressive":
+                self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
+                                                                 np.array([17.5, 3.64807365, 0.1886117]))) / 100
+                if z > 0.1:
+                    self._BUFFER = 0.1
+
+            if self._BUFFER_AGGRESSIVENESS == "Balanced":
+                self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
+                                                                 np.array([35.25, 7.70872705, 0.42437632]))) / 100
+                if z > 0.1:
+                    self._BUFFER = 0.20
+
+            elif self._BUFFER_AGGRESSIVENESS == "Conservative":
+                self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
+                                                                 np.array([49.25, 6.53613195, 0.14145877]))) / 100
+                if z > 0.1:
+                    self._BUFFER = 0.35
+
+        else:
             self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
                                                              np.array([49.25, 6.53613195, 0.14145877]))) / 100
             if z > 0.1:
                 self._BUFFER = 0.35
-            # print('Conservative buffer is', self._BUFFER)
 
-        elif self._BUFFER_AGGRESSIVENESS == "Ultra Conservative":
-            self._BUFFER = (np.polynomial.polynomial.polyval(np.log(z),
-                                                             np.array([49.5, 3.56121475, -0.1886117]))) / 100
-            if z > 0.1:
-                self._BUFFER = 0.40
-            # print('Ultra conservative buffer is', self._BUFFER)
-
-        # # Use our quadratic buffer curve
-        # self._BUFFER = (-200000 * (z ** 2) + (5000 * z) + 5) / 100
-        #
-        # if z > 0.01:
-        #     self._BUFFER = 0.35
-
-        # # Now we have to dampen the buffer. Find the trend line and get the gradient
-        # p = np.polyfit(list(range(0, len(self.pv_window))), self.pv_window, 1)
-        # # If the gradient is above 0 (positive trend line)
-        # if p[0] > 0:
-        #     self._BUFFER /= 2
+        # Make sure buffer is not below 0
+        if self._BUFFER < 0:
+            self._BUFFER = 0
 
         return sd, z
 
@@ -247,9 +255,6 @@ class AnalyseMethods:
 
         # print('Our current window is: ', list(self.pv_window))
 
-        # Calculate a new buffer
-        z_stats = self.update_dynamic_buffer()
-
         # Take the weighted average of the current window
         pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
 
@@ -257,7 +262,7 @@ class AnalyseMethods:
         if data['inverter_status'] == "Stand Alone":
             pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
-        # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+        print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
         # Define our thresholds
         upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
@@ -413,6 +418,9 @@ class AnalyseMethods:
         # Define a dictionary that will contain all of our charge rates
         charge_rate_dict = {"charge_rates": {}}
 
+        # Now define all of our algorithm variables for this new set of data
+        self.update_algorithm_variables(inverter_status)
+
         # print('ac2p is: ', data['ac2p'])
         # print('Our current charger list is', self.charger_list)
         # print('We have available solar current of ', approx_dc_current)
@@ -448,11 +456,10 @@ class AnalyseMethods:
                 charge_rate_dict.update({'available_current': self._MAX_GRID_CONNECTED_CURRENT - data['ac2c'] + 0.2})
 
             elif self._CHARGING_MODE == "MAX_CHARGE_STANDALONE" or self._CHARGING_MODE == "PV_with_BT":
-                final_charge_rate = self.multiple_charger_calculate_max_charge_standalone(data, num_active_chargers)
 
-                print('final charge rate coming out is', final_charge_rate)
-                final_charge_rate = min(27, final_charge_rate)
-                print('final charge rate after min fix is:', final_charge_rate)
+                # Calculate the max standalone charge. If it's over 27 then use 27 as the final rate
+                final_charge_rate = min(27, self.multiple_charger_calculate_max_charge_standalone(data,
+                                                                                                  num_active_chargers))
 
                 # If we do not have a string for the final charge rate then we just split it and go on
                 if final_charge_rate is not str:
@@ -466,9 +473,6 @@ class AnalyseMethods:
                     charge_rate_dict['charge_rates'].update({charger: split_charge_rate})
 
                 charge_rate_dict.update({'available_current': self._MAX_STANDALONE_CURRENT - data['ac2c']})
-
-            elif self.MULTIPLE_CHARGING_MODE == "PRIORITY_LIST":
-                pass
 
             return charge_rate_dict
 
@@ -492,11 +496,6 @@ class AnalyseMethods:
                 # ******************************************************************************************************
                 # ******************************** FIRST TRACK OUR SOLAR ***********************************************
                 # ******************************************************************************************************
-
-                # print('Our current window is: ', list(self.pv_window))
-
-                # Calculate a new buffer
-                z_stats = self.update_dynamic_buffer()
 
                 # Take the weighted average of the current window
                 pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
@@ -623,7 +622,7 @@ class AnalyseMethods:
                     final_charge_rate = self._THROTTLE_ADJUSTED_CHARGE_RATE
 
             elif self._CHARGING_MODE == "PV_no_BT":
-                # Todo: WIP
+                # Todo: Make this mode very very limited
                 final_charge_rate = 'stop'
 
             elif self._CHARGING_MODE == "PV_with_BT":
@@ -640,21 +639,20 @@ class AnalyseMethods:
 
                     # print('Our current window is: ', list(self.pv_window))
 
-                    # Calculate a new buffer which depends on the buffer aggressiveness setting
-                    z_stats = self.update_dynamic_buffer()
-
                     # Take the weighted average of the current window
                     pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
-                    # Apply the buffer to the weighted average
-                    pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
-                    # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+                    # Apply the buffer to our PV window
+                    pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
                     # Define our thresholds
                     upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
                     lower_threshold = self._CURRENT_CHARGE_RATE * (1 - self.LOWER_THRESHOLD)
 
-                    # print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
+                    print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+
+                    print('Our current charge rate is', self._CURRENT_CHARGE_RATE)
+                    print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
 
                     # Check if our window mean is greater than the upper threshold
                     if pv_window_mean > upper_threshold:
@@ -699,7 +697,7 @@ class AnalyseMethods:
                             #     self._CURRENT_CHARGE_RATE = self._MAX_STANDALONE_CURRENT
 
                             self._CURRENT_CHARGE_RATE = min(
-                                floor(self._BATTERY_CHARGE_RATE + self._CURRENT_CHARGE_RATE),
+                                self._BATTERY_CHARGE_RATE + self._CURRENT_CHARGE_RATE,
                                 self._MAX_STANDALONE_CURRENT)
 
                             final_charge_rate = floor(self._CURRENT_CHARGE_RATE)
@@ -842,27 +840,14 @@ class AnalyseMethods:
         else:
             self._CALIBRATE_DONE = True
 
-    def change_algorithm_variables(self):
+    def update_algorithm_variables(self, inverter_status):
         """ This function will adjust all of the important variables needed for the algorithm depending on the
-        charging mode """
-        print('Changing the algorithm variables')
-        if self._CHARGING_MODE == "PV_with_BT":
-            # Define the charging upper limit threshold
-            self.UPPER_THRESHOLD = 0.07
-            # Define the charging lower limit threshold
-            self.LOWER_THRESHOLD = 0.04
-            # Define the increase in charging rate
-            self._CHARGE_RATE_INCREASE = 1.20
-            # Define the decline in charging rate
-            self._CHARGE_RATE_DECREASE = 0.90
+        battery aggressiveness setting """
 
-            # Define the base buffer (the lowest possible buffer)
-            self._BASE_BUFFER = 0.20
-            # Define the max buffer (the highest possible buffer)
-            self._MAX_BUFFER = 0.4
-
-        elif self._CHARGING_MODE == "PV_no_BT":
-            # These values are the stock values
+        # If we are standalone mode, we only use one set of variables
+        if inverter_status == "Stand Alone":
+            # Calculate a new buffer which depends on the buffer aggressiveness setting
+            z_stats = self.update_dynamic_buffer(standalone_mode=True)
 
             # Define the charging upper limit threshold
             self.UPPER_THRESHOLD = 0.07
@@ -872,10 +857,38 @@ class AnalyseMethods:
             self._CHARGE_RATE_INCREASE = 1.05
             # Define the decline in charging rate
             self._CHARGE_RATE_DECREASE = 0.80
-            # Define the base buffer (the lowest possible buffer)
-            self._BASE_BUFFER = 0.20
-            # Define the max buffer (the highest possible buffer)
-            self._MAX_BUFFER = 0.4
+
+        else:
+            # Calculate a new buffer which depends on the buffer aggressiveness setting
+            z_stats = self.update_dynamic_buffer()
+
+            if self._BUFFER_AGGRESSIVENESS == "Aggressive":
+                # Define the charging upper limit threshold
+                self.UPPER_THRESHOLD = 0.03
+                # Define the charging lower limit threshold
+                self.LOWER_THRESHOLD = 0.08
+                # Define the increase in charging rate
+                self._CHARGE_RATE_INCREASE = 1.15
+                # Define the decline in charging rate
+                self._CHARGE_RATE_DECREASE = 0.95
+
+            else:
+                # Define the charging upper limit threshold
+                self.UPPER_THRESHOLD = 0.07
+                # Define the charging lower limit threshold
+                self.LOWER_THRESHOLD = 0.04
+                # Define the increase in charging rate
+                self._CHARGE_RATE_INCREASE = 1.05
+                # Define the decline in charging rate
+                self._CHARGE_RATE_DECREASE = 0.80
+
+        # print('Algorithm variables coming:')
+        # print('Inverter Status:', inverter_status)
+        # print('Buffer Aggressiveness:', self._BUFFER_AGGRESSIVENESS)
+        # print('Upper Threshold:', self.UPPER_THRESHOLD)
+        # print('Lower Threshold:', self.LOWER_THRESHOLD)
+        # print('Charge Rate Increase', self._CHARGE_RATE_INCREASE)
+        # print('Charge Rate Decrease', self._CHARGE_RATE_DECREASE)
 
     def make_decision(self, modbus_data):
 
@@ -887,7 +900,6 @@ class AnalyseMethods:
             # If our purpose is to change charge mode, then change charge mode
             if purpose == "change_single_charging_mode":
                 self._CHARGING_MODE = payload['charge_mode']
-                self.change_algorithm_variables()
                 print('change in charging mode', self._CHARGING_MODE)
 
             # If our purpose is charge status, we have a new list of dicts for charging. This only happens when a
@@ -903,7 +915,6 @@ class AnalyseMethods:
                 self._BUFFER_AGGRESSIVENESS = payload['buffer_aggro_mode']
 
             elif purpose == "metervalue_current":
-                # Todo: might be exception here if chargerID hasn't been defined yet
                 temp_charger_id = payload['chargerID']
                 temp_metervalue_current = payload['metervalue_current']
                 self.charging_wind_down_dict[temp_charger_id].append(temp_metervalue_current)
