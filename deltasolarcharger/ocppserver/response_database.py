@@ -82,7 +82,6 @@ def RemoteStartTransaction():
         #         'chargingRateUnit': 'A',
         #         'ChargingSchedulePeriod': {
         #             'startPeriod': 0,
-        #             # Todo: edit this limit to have the live charge rate
         #             'limit': 16
         #
         #         }

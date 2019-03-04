@@ -212,7 +212,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         elif action == "StatusNotification":
             try:
                 if self.decoded_message[3]['status'] == "Charging":
-                    print('statusnotification is charging!!!')
                     self._isCharging = True
                     if self.data_handler[0]:
                         print('sending that we are charging now')
@@ -244,7 +243,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     if not self._isCharging or (self._isCharging and self.decoded_message[3]['connectorId'] != 0):
                         self._isCharging = False
                         if self.data_handler[0]:
-                            print('sending that we arent charging now')
                             self.data_handler[0].write_message(json.dumps(
                                 {"charging_status": self._isCharging, 'charging_timestamp': self.charging_timestamp,
                                  "meterValue": self.meter_value, "chargerID": self._CHARGER_ID,
@@ -728,9 +726,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         # Record my own charger ID down
         self._CHARGER_ID = self.request.path.split('/')[-1]
 
-        # Todo: decide whether or not we need this. Probably easier just to access the object directly
-        self.db = UserDataStore(self.request.path.split('/')[-1])
-
         print('ws clients before checking for duplicate:', self.ws_clients)
         # We search for existing WebSocket clients with the same chargerID and we close them
         for client in self.ws_clients.copy():
@@ -742,7 +737,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 print('Forced closed...')
 
         # Add this websocket client to our list
-        self.ws_clients.add((self, self.request.path.split('/')[-1], self.db))
+        self.ws_clients.add((self, self.request.path.split('/')[-1]))
         print('ws clients after latest add:', self.ws_clients)
 
         tornado.ioloop.IOLoop.current().spawn_callback(self.charge_rate_control)
@@ -769,7 +764,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         print('closing...', self._CHARGER_ID)
-        self.ws_clients.remove((self, self.request.path.split('/')[-1], self.db))
+        self.ws_clients.remove((self, self.request.path.split('/')[-1]))
 
         if self.data_handler[0]:
             try:
@@ -783,14 +778,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         print(self.ws_clients)
 
         self.timeout = None
-
-
-class UserDataStore:
-    def __init__(self, charger_id):
-        self.charger_id = charger_id
-        self.charging = False
-
-        self.random_number = randint(0, 101)
 
 
 class OCPPDataHandler(tornado.websocket.WebSocketHandler):
@@ -848,7 +835,8 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
             _found_charger = False
             # Loop through all of the clients, see if there is a match. If there is a match then send the message to
             # that client and update the _found_charger flag.
-            """ self.ws_clients = (self, self.request.path.split('/')[-1], self.db) """
+            """ Structure of self.ws_clients: (self, self.request.path.split('/')[-1]) """
+
             for client in self.ws_clients:
                 # Check the charger ID matches the instance's ID
                 if client[1] == message['chargerID']:
