@@ -728,9 +728,6 @@ class FirebaseMethods:
                 self.db.child("users").child(self.uid).child("evc_inputs").child(charger).update({"alive": False},
                                                                                                  self.idToken)
 
-        # Initialize the type of system this software is (to load the correct dashboard)
-        self.db.child("users").child(self.uid).update({'system_type': 'multiple'}, self.idToken)
-
         # We have to check if we need to handle inverter database - if yesterday's csv is not there
         with FTP(host=self._FTP_HOST) as ftp:
             ftp.login(user=self._FTP_USER, passwd=self._FTP_PW)

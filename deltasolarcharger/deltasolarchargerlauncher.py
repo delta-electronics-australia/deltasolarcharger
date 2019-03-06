@@ -1,4 +1,4 @@
-""" Delta Solar Charger Backend v0.80
+""" Delta Solar Charger Backend v0.95
     Written by Benjamin Ong for Delta Electronics in collaboration with the CSIRO """
 
 import subprocess
@@ -350,10 +350,14 @@ def check_internet():
 
 def restart():
     """ This script restarts the OCPP backend and the solar charger back end """
+    print('Restarting everything...')
+
     kill_ocpp_backend()
     kill_sc_backend()
     os.system(
         'lxterminal --working-directory=/home/pi/deltasolarcharger/deltasolarcharger/ocppserver -e sudo python3 ocppserver.py &')
+
+    time.sleep(2)
     os.execv(sys.executable, ['python3'] + sys.argv)
 
 
@@ -367,6 +371,7 @@ def kill_ocpp_backend():
         # Look for the process with our OCPP backend in it and kill it
         if 'ocppserver.py' in process_command:
             proc.kill()
+            print('Killed OCPP Backend')
 
 
 def kill_sc_backend():
@@ -381,8 +386,9 @@ def kill_sc_backend():
             for proc in process.children(recursive=True):
                 proc.kill()
             process.kill()
-    except psutil.NoSuchProcess:
-        pass
+            print('Killed SC Backend')
+    except psutil.NoSuchProcess as e:
+        print(e)
 
 
 def check_latest_version():
@@ -416,7 +422,7 @@ def download_from_ftp():
         # Now download deltasolarchargerlauncher.py
         ftp.cwd("/deltasolarcharger/deltasolarcharger/")
         with open('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarchargerlauncher.py', 'wb') as file:
-            ftp.retrbinary('RETR ' + 'deltasolarcharger.py', file.write)
+            ftp.retrbinary('RETR ' + 'deltasolarchargerlauncher.py', file.write)
 
         # Then download all of the files in dschelpers
         ftp.cwd("/deltasolarcharger/deltasolarcharger/dschelpers")
@@ -444,8 +450,11 @@ def check_for_updates():
     """ This function checks for updates and performs an update if necessary """
 
     print("Performing a software update")
+
+    # Get the latest software version
     latest_version = check_latest_version()
 
+    # Get the current version from our local txt file
     with open('../docs/version.txt', 'r') as f:
         current_version = float(f.read())
         print('The latest version of the firmware is:', latest_version, 'current version is:', current_version)
@@ -545,6 +554,7 @@ def start_config_server():
 
 
 if __name__ == '__main__':
+    print('Welcome to the Delta Solar Charger Backend!')
 
     # Initialize our process
     solar_charger_process = None
