@@ -187,7 +187,9 @@ class OCPPWebsocketReceiver(Thread):
         print('OCPP Websocket Receiver closed')
 
     def on_error(self, error):
-        """ Errors here will trigger the stopped event which will prompt update_firebase to try to reconnect to WS """
+        """ Errors here will trigger the stopped event which will prompt update_external_sources to
+         try to reconnect to WS """
+
         print('Got an error in ws!!', error)
 
         # This error will trigger when we try to send a message when it is closed
@@ -234,7 +236,7 @@ class FirebaseMethods:
         self.manual_charge_control_listener = None
         self.misc_listener = None
 
-        # Define our update_firebase flags
+        # Define our update_external_sources flags
         self.history_counter = 0
         self.webanalytics_counter = 0
         self.log_counter = 0
@@ -1218,7 +1220,7 @@ class FirebaseMethods:
                 authorize_thread.start()
 
     def check_information_bus(self):
-        """ Called from update_firebase once a second and handles any new requests sent on the information bus """
+        """ Called from update_external_sources once a second and handles any new requests sent on the information bus """
 
         # Try to grab something from the information bus
         try:
@@ -2025,7 +2027,7 @@ class FirebaseMethods:
         #     else:
         #         print(firebase_csv_name, 'it is today, dont need to delete')
 
-    def update_firebase(self, update_package):
+    def update_external_sources(self, update_package):
         """ This function updates all of the different Firebase lists with up to date data """
 
         # (If we're online) If the day is different, then we need to run special code to fix our database up
@@ -2158,6 +2160,7 @@ class FirebaseMethods:
         # Updating analytics requires us to be online
         elif self._ONLINE and label == "analytics_data":
             payload.update({'time': str(current_time)})
+
             # We will update analytics data every "webanalytics_counter_max" seconds
             if self.webanalytics_counter == self.webanalytics_counter_max:
                 print('updating analytics')

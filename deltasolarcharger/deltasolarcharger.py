@@ -153,21 +153,21 @@ class FirebaseCommunications(FirebaseMethods, Process):
 
                     # If the data from analyze is a charging mode, then we have to update charge mode, not charge rate
                     if data_from_analyse in ['MAX_CHARGE_GRID', 'MAX_CHARGE_STANDALONE', 'PV_no_BT', 'PV_with_BT']:
-                        self.update_firebase(['update_charge_mode', data_from_analyse])
+                        self.update_external_sources(['update_charge_mode', data_from_analyse])
 
                     # If the type is not a tuple then it is either a charge rate or start/stop
                     else:
-                        self.update_firebase(['update_charge_rate', data_from_analyse])
+                        self.update_external_sources(['update_charge_rate', data_from_analyse])
 
                 if not self.modbus_to_firebase_queue.empty():
                     # First we get the data from our queue (remember: data is a tuple of dictionaries)
                     modbus_data = self.modbus_to_firebase_queue.get()
                     # Then we send it to be uploaded to Firebase
-                    self.update_firebase(['modbus_data', modbus_data])
+                    self.update_external_sources(['modbus_data', modbus_data])
 
                 if not self.webanalytics_to_firebase_queue.empty():
                     analytics_data = self.webanalytics_to_firebase_queue.get()
-                    self.update_firebase(['analytics_data', analytics_data])
+                    self.update_external_sources(['analytics_data', analytics_data])
 
             except HTTPError as e:
                 print('got a http error, laters', e, datetime.now())
