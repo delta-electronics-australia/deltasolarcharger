@@ -1,4 +1,4 @@
-""" Delta Solar Charger Backend v0.95
+""" grgregreDelta Solar Charger Backend v0.95
     Written by Benjamin Ong for Delta Electronics in collaboration with the CSIRO """
 
 import subprocess
