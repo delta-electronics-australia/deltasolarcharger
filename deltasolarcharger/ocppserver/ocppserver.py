@@ -40,6 +40,7 @@ class httpHandler(tornado.web.RequestHandler):
         print('closed...')
 
 
+# CONNECTS TO CHARGERS
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
     def lookup_action_database(self, action, optional=False):
@@ -780,6 +781,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.timeout = None
 
 
+# CONNECTS TO SMART CONTROLLER
 class OCPPDataHandler(tornado.websocket.WebSocketHandler):
     def synchronise_data(self, message):
         for client in self.ws_clients:
@@ -831,12 +833,12 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
             for client in self.ws_clients:
                 client[0].change_authentication_requirement(message['authentication_required'])
 
+        # elif message['purpose'] == "charge_rate"
         else:
             _found_charger = False
             # Loop through all of the clients, see if there is a match. If there is a match then send the message to
             # that client and update the _found_charger flag.
             """ Structure of self.ws_clients: (self, self.request.path.split('/')[-1]) """
-
             for client in self.ws_clients:
                 # Check the charger ID matches the instance's ID
                 if client[1] == message['chargerID']:
@@ -861,7 +863,6 @@ class OCPPDataHandler(tornado.websocket.WebSocketHandler):
         _DEBUG and print('OCPP Data Handler closed', datetime.now())
 
 
-#
 class DataHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         print('data open!')
