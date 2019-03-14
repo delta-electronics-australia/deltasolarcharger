@@ -1,10 +1,12 @@
 #!/bin/bash
 
+# Check if we have root permissions
 if [ "$EUID" -ne 0 ]
 	then echo "Must be root"
 	exit
 fi
 
+# Check if we have a Wi-Fi password
 if [[ $# -lt 1 ]]; 
 	then echo "You need to pass a password!"
 	echo "Usage:"

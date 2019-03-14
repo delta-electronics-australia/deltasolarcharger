@@ -104,7 +104,7 @@ class SoftwareUpdateNotifier(Thread):
         self.ws.close()
 
 
-class OCPPWebsocketReceiver(Thread):
+class OCPPDataBridge(Thread):
     def __init__(self, url, information_bus, charger_status_information_bus, ws_receiver_stopped_event):
         self.url = url
         self.information_bus = information_bus
@@ -290,16 +290,16 @@ class FirebaseMethods:
 
         # Check if we have the folders logs/ and charging_logs/
         if not os.path.exists('../data/logs/'):
-            os.mkdir('../data/logs')
+            os.makedirs('../data/logs', exist_ok=True)
         if not os.path.exists('../data/charging_logs/'):
-            os.mkdir('../data/charging_logs/')
+            os.makedirs('../data/charging_logs/', exist_ok=True)
 
         _LOG_FILE_NAME = datetime.now().strftime('%Y-%m-%d')
         self.log_data(location='../data/logs/' + _LOG_FILE_NAME, purpose='log_inverter_data', initial_run=True)
 
         # Define our local OCPP websocket connection
-        self.ocpp_ws = OCPPWebsocketReceiver("ws://127.0.0.1:8000/ocpp_data_service/", self.information_bus,
-                                             self.charger_status_information_bus, self.ws_receiver_stopped_event)
+        self.ocpp_ws = OCPPDataBridge("ws://127.0.0.1:8000/ocpp_data_service/", self.information_bus,
+                                      self.charger_status_information_bus, self.ws_receiver_stopped_event)
         self.ocpp_ws.name = 'OCPPWS'
         self.ocpp_ws.daemon = True
         self.ocpp_ws.start()
@@ -1606,7 +1606,7 @@ class FirebaseMethods:
 
     @staticmethod
     def check_and_make_ftp_dir(ftp, directory):
-        """ This function takes in a directory and checks if it exists on the FTP server, if it doesn't then mkdir """
+        """ This function takes in a directory and checks if it exists on the FTP server, if it doesn't then m """
         _directory_check_passed = False
         while _directory_check_passed is False:
             try:
@@ -2135,9 +2135,9 @@ class FirebaseMethods:
                 self.ocpp_ws.stop()
 
                 print('stopped!', self.ocpp_ws)
-                self.ocpp_ws = OCPPWebsocketReceiver("ws://127.0.0.1:8000/ocpp_data_service/", self.information_bus,
-                                                     self.charger_status_information_bus,
-                                                     self.ws_receiver_stopped_event)
+                self.ocpp_ws = OCPPDataBridge("ws://127.0.0.1:8000/ocpp_data_service/", self.information_bus,
+                                              self.charger_status_information_bus,
+                                              self.ws_receiver_stopped_event)
                 self.ocpp_ws.name = 'OCPPWS'
                 self.ocpp_ws.daemon = True
                 self.ocpp_ws.start()
