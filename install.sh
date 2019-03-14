@@ -70,6 +70,9 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 update-rc.d hostapd enable
 update-rc.d isc-dhcp-server enable
 
+sudo systemctl unmask hostapd.service
+
+# Now start our access point and DHCP server services
 sudo service hostapd start
 sudo service isc-dhcp-server-start
 
@@ -87,7 +90,7 @@ sudo chmod +x /home/pi/deltasolarcharger/deltasolarcharger/start.sh
 
 # Make start.sh run every time the unit boots up
 cat >> /etc/xdg/lxsession/LXDE-pi/autostart << EOF
-sudo nano /home/pi/.config/lxsession/LXDE-pi/autostart
+/home/pi/deltasolarcharger/deltasolarcharger/start.sh
 EOF
 
 reboot
