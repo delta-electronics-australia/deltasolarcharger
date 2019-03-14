@@ -195,7 +195,7 @@ class FirebaseCommunications(FirebaseMethods, Process):
                 self.stop()
 
 
-# This process will wait and react to anything from Firebase or executes actions
+# This process handles all charge rate calculations
 class Analyse(Process):
     def __init__(self, **kwargs):
         super().__init__()
@@ -235,6 +235,7 @@ class Analyse(Process):
         time.sleep(0.10)
 
 
+# WebAnalytics process handles all calculations for analytics displayed on the web
 class WebAnalytics(WebAnalyticsMethods, Process):
     def __init__(self, **kwargs):
         super().__init__()
