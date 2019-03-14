@@ -73,8 +73,21 @@ update-rc.d isc-dhcp-server enable
 sudo service hostapd start
 sudo service isc-dhcp-server-start
 
+# Install network manager to manage our 3G connection
 apt-get install network-manager network-manager-gnome -y
 nmcli c add con-name "mycon" type gsm ifname "*" apn "live.vodafone.com"
 nmcli c mod mycon connection.autoconnect yes
+
+# Install Python dependencies
+cd dependencies
+sudo pip3 install tornado-5.1.1-cp35-cp35m-linux_armv7l.whl websocket_client-0.54.0-py2.py3-none-any.whl MinimalModbus-0.7-py2.py3-none-any.whl psutil-5.4.8-cp35-cp35m-linux_armv7l.whl Pyrebase-3.0.27-py3-none-any.whl pyasn1_modules-0.2.3-py2.py3-none-any.whl -f ./ --no-index
+
+# First make start.sh executable
+sudo chmod +x /home/pi/deltasolarcharger/deltasolarcharger/start.sh
+
+# Make start.sh run every time the unit boots up
+cat >> /etc/xdg/lxsession/LXDE-pi/autostart << EOF
+sudo nano /home/pi/.config/lxsession/LXDE-pi/autostart
+EOF
 
 reboot
