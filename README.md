@@ -66,3 +66,6 @@ In this example, the command you would use is:
 Once this script finishes running, the system should reboot by itself. Once the system has rebooted, the on board Wi-Fi 
 router will have been activated and the Solar Charger program and OCPP backend will also be running.
 
+enable SSH and VNC in Pi configuration and disable serialconasole: preferences->raspberry pi configuration-> interfaces
+
+Run app and create a new account and setup the connection method
