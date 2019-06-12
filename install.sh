@@ -91,7 +91,7 @@ sudo pip3 install tornado-5.1.1-cp35-cp35m-linux_armv7l.whl websocket_client-0.5
 sudo chmod +x /home/pi/deltasolarcharger/deltasolarcharger/start.sh
 
 # Make start.sh run every time the unit boots up
-cat >> /etc/xdg/lxsession/LXDE-pi/autostart << EOF
+cat >> ~/.config/lxsession/LXDE-pi/autostart << EOF
 @lxpanel -- profile LXDE-pi
 @pcmanfm --desktop --profile LXDE-pi
 @xscreensaver -no-splash
