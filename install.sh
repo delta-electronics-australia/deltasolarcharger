@@ -87,7 +87,8 @@ nmcli c mod mycon connection.autoconnect yes
 apt-get install libsystemd-dev -y
 cd dependencies
 sudo pip3 install tornado-5.1.1-cp35-cp35m-linux_armv7l.whl websocket_client-0.54.0-py2.py3-none-any.whl MinimalModbus-0.7-py2.py3-none-any.whl psutil-5.4.8-cp35-cp35m-linux_armv7l.whl Pyrebase-3.0.27-py3-none-any.whl pyasn1_modules-0.2.3-py2.py3-none-any.whl -f ./ --no-index
-sudo python3 python-systemd-master/setup.py
+cd python-systemd-master
+sudo python3 setup.py install
 
 # First make start.sh executable
 sudo chmod +x /home/pi/deltasolarcharger/deltasolarcharger/start.sh
