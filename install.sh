@@ -15,7 +15,7 @@ if [[ $# -lt 1 ]];
 fi
 
 apt-get update
-apt-get install hostapd isc-dhcp-server iptables-persistent -y
+apt-get install hostapd isc-dhcp-server iptables-persistent libqmi-utils -y
 
 sed -i 's/^option domain-name/#option domain-name/' /etc/dhcp/dhcpd.conf
 sed -i 's/#authoritative/authoritative/' /etc/dhcp/dhcpd.conf
