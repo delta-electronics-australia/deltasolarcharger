@@ -33,13 +33,18 @@ journal_fd = j.fileno()
 poll_event_mask = j.get_events()
 p.register(journal_fd, poll_event_mask)
 
-# Poll for new journal entries every 250ms
+# Poll for new journal entries every 150ms
 while True:
     if p.poll(150):
         if j.process() == journal.APPEND:
             for entry in j:
                 # pprint.pprint(entry)
                 if "ClientIdsExhausted" in entry["MESSAGE"]:
+                    print('Got a ClientIDsExhausted message!')
                     os.system(
                         'sudo qmicli -d /dev/cdc-wdm0 --wds-get-packet-service-status --device-open-sync -p; reboot')
+                elif "No DHCPOFFERS received" in entry["MESSAGE"]:
+                    print("Received no DHCP offers, let's restart the system")
+                    os.system(
+                        'sudo dhclient -r; sudo dhclient; sudo qmicli -d /dev/cdc-wdm0 --wds-get-packet-service-status --device-open-sync -p; reboot')
                 print('*********************************')
