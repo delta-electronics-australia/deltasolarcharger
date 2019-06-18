@@ -1,0 +1,85 @@
+Python wrappers for libsystemd API
+
+CHANGES WITH 235:
+
+	* Adapt the rename of systemd-activate to systemd-socket-activate
+	  performed in systemd 230
+
+	* Support for the new sd_listen_fds_with_names added in systemd 227
+	  is added.
+
+CHANGES WITH 234:
+
+        * Support for the new sd_is_socket_sockaddr added in systemd 233
+          is added.
+
+        * New id128 constants added in systemd 233 are included.
+
+        * "Extra" fields for the log entry can be passed during
+          LoggerAdapter initialization or for each message separately.
+          Fields specified for the message have higher priority.
+
+        * Small fixes and style tweaks all over.
+
+        Contributions from: Park Jeongsoo, Jimmy Cao, Johannes
+        Weberhofer, Mike Gilbert, Oleksii Shevchuk, Ville Skyttä,
+        Wesley Bowman, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 233:
+
+        * Tests are fixed and should pass on various old and new
+          systems alike.
+
+        * journal.stream() can be used without arguments and defaults
+          to LOG_LEVEL.
+
+       Contributions from Robert James Hernandez,
+       Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 232:
+
+        * Wrappers for sd_journal_enumerate_unique, has_runtime_files,
+          has_peristent_files.
+
+        * sd_journal_open_directory_fd, sd_journal_open_files_fd can
+          be used by passing file descriptors to the initializer as
+          the path or files arguments.
+
+          SD_JOURNAL_OS_ROOT flag is supported, and various flags may
+          be passed to the constructor in combination with path or
+          files arguments. All flags arguments are now passed through
+          to the underlying libsystemd library functions, so which
+          combinations are supported depends on that library.
+          systemd 232 contains various fixes in this area.
+
+        Contributions from: Benedit Morbach, Michael Biebl,
+        Michael Herold, Mike Gilbert, Nir Soffer, Sebastian,
+        Ville Skyttä, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 231:
+
+        * Various build fixes and cleanups: documentation can be
+          generated with 'make sphinx-html', pip install works out
+          of the box.
+
+        * Tests that cover most of the python code were added. As a
+          result, a bug in sd_is_mq was fixed in systemd 227.
+
+        * Functions sd_pid_notify and sd_pid_notify_with_fds are now
+          wrapped as optional arguments to notify(), when compiled
+          against a new-enough libsystemd.
+
+        Contributions from: David Strauss, Evgeny Vereshchagin,
+        Jacek Konieczny, Jeroen Dekkers, Zbigniew Jędrzejewski-Szmek
+
+CHANGES WITH 230:
+
+        * python-systemd is again a separate project, after being part
+          of systemd for many years.
+
+        Contributions from: Dave Reisner, David Strauss,
+        Evgeny Vereshchagin, Greg KH, Harald Hoyer, Jacek Konieczny,
+        Jeroen Dekkers, Kay Sievers, Lennart Poettering, Lukas Nykryn,
+        Marti Raudsepp, Richard Marko, Simon Farnsworth,
+        Steven Hiscocks, Thomas Hindoe Paaboel Andersen, Ville Skyttä,
+        Zbigniew Jędrzejewski-Szmek
