@@ -38,7 +38,6 @@ while True:
     if p.poll(150):
         if j.process() == journal.APPEND:
             for entry in j:
-                # pprint.pprint(entry)
                 if "ClientIdsExhausted" in entry["MESSAGE"]:
                     print('Got a ClientIDsExhausted message!')
                     os.system(
@@ -47,4 +46,6 @@ while True:
                     print("Received no DHCP offers, let's restart the system")
                     os.system(
                         'sudo dhclient -r; sudo dhclient; sudo qmicli -d /dev/cdc-wdm0 --wds-get-packet-service-status --device-open-sync -p; reboot')
-                print('*********************************')
+                else:
+                    pprint.pprint(entry)
+                    print('*********************************')
