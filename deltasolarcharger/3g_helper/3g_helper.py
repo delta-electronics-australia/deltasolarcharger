@@ -42,7 +42,7 @@ while True:
                     print('Got a ClientIDsExhausted message!')
                     os.system(
                         'sudo qmicli -d /dev/cdc-wdm0 --wds-get-packet-service-status --device-open-sync -p; reboot')
-                elif "No DHCPOFFERS received" in entry["MESSAGE"]:
+                elif "No DHCPOFFERS received" in entry["MESSAGE"] or ('dhcp4' in entry['MESSAGE'] and 'request timed out' in entry['MESSAGE']):
                     print("Received no DHCP offers, let's restart the system")
                     os.system(
                         'sudo dhclient -r; sudo dhclient; sudo qmicli -d /dev/cdc-wdm0 --wds-get-packet-service-status --device-open-sync -p; reboot')
