@@ -39,9 +39,9 @@ class AnalyseMethods:
 
         """ Maximum current variables """
         # Define the maximum current for standalone mode (limited by the E5)
-        self._MAX_STANDALONE_CURRENT = 27
+        self._MAX_STANDALONE_CURRENT = 23
         # Define the maximum current for grid connected modes (limited by the E5, trips out at 28A)
-        self._MAX_GRID_CONNECTED_CURRENT = 27
+        self._MAX_GRID_CONNECTED_CURRENT = 23
 
         """ Solar tracking variables """
         # Define the charging upper limit threshold
