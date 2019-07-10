@@ -2,6 +2,9 @@ from multiprocessing import Process, Manager
 
 import threading
 
+import logging
+import logging.handlers
+
 import time
 from datetime import datetime
 from sys import stdin
@@ -11,6 +14,8 @@ import random
 
 from requests.exceptions import HTTPError, SSLError, ConnectionError
 from requests.packages.urllib3.exceptions import NewConnectionError, MaxRetryError
+
+from deltasolarcharger.utils import log_worker_configurer
 
 # Add dschelpers into our path
 import sys
@@ -27,6 +32,8 @@ class ModbusCommunications(ModbusMethods):
     def __init__(self, **kwargs):
         super().__init__(kwargs['analyse_to_modbus_queue'])
 
+        self.logger = None
+
         # *****************
         self.kill_counter = 0
         self.kill_count = random.randint(45, 60)
@@ -39,6 +46,8 @@ class ModbusCommunications(ModbusMethods):
         self.modbus_to_firebase_queue = kwargs['modbus_to_firebase_queue']
         self.modbus_to_analyse_queue = kwargs['modbus_to_analyse_queue']
         self.modbus_to_webanalytics_queue = kwargs['modbus_to_webanalytics_queue']
+
+        self.log_queue = kwargs['log_queue']
 
         # Define our stop events
         self._stop_event = kwargs['stop_event']
@@ -82,6 +91,7 @@ class ModbusCommunications(ModbusMethods):
                 self.modbus_to_webanalytics_queue.put(modbus_data)
                 self._webanalytics_event.set()
 
+                self.logger.log(logging.INFO, "finished one modbus round!")
                 end = time.time()
                 time.sleep(1 - (end - start))
 
@@ -107,6 +117,9 @@ class ModbusCommunications(ModbusMethods):
                 self.initiate_parameters(1, 5)
 
     def run(self):
+        log_worker_configurer(self.log_queue)
+        self.logger = logging.getLogger()
+
         self.start_transmission()
 
 
@@ -249,6 +262,9 @@ class WebAnalytics(WebAnalyticsMethods, Process):
         self.modbus_to_webanalytics_queue = kwargs['modbus_to_webanalytics_queue']
         self.webanalytics_to_firebase_queue = kwargs['webanalytics_to_firebase_queue']
 
+        # Define the log queue
+        self.log_queue = kwargs['log_queue']
+
         # Define our stop events
         self._stop_event = kwargs['stop_event']
         self._webanalytics_event = kwargs['webanalytics_event']
@@ -264,6 +280,8 @@ class WebAnalytics(WebAnalyticsMethods, Process):
         return self._stop_event.is_set()
 
     def run(self):
+        log_worker_configurer(self.log_queue)
+
         while True:
             # print('Webanalytics at the start of loop', self.stopped())
             if self.stopped():
@@ -295,16 +313,51 @@ class WebAnalytics(WebAnalyticsMethods, Process):
             self._webanalytics_event.clear()
 
 
+class LogListenerProcess(Process):
+    def __init__(self, log_queue):
+        super().__init__()
+
+        self.log_queue = log_queue
+
+    def listener_configurer(self):
+        root = logging.getLogger()
+        h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarcharger.log", when='midnight')
+        f = logging.Formatter('%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s')
+        h.setFormatter(f)
+        root.addHandler(h)
+
+    def run(self):
+        self.listener_configurer()
+        while True:
+            try:
+                record = self.log_queue.get()
+                if record is None:  # We send this as a sentinel to tell the listener to quit.
+                    break
+                print(record.levelname, record.msg)
+                logger = logging.getLogger(record.name)
+                logger.handle(record)
+            except Exception:
+                import sys, traceback
+                print('Whoops! Problem:', file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+
+
 def main():
+    # Create a manager to manage all our multiprocess queues and events
+    process_manager = Manager()
+    _log_queue = process_manager.Queue()
+    log_listener_process = LogListenerProcess(_log_queue)
+
+    log_worker_configurer(_log_queue)
+    logger = logging.getLogger()
+
     with open('../docs/version.txt', 'r') as f:
         current_version = float(f.read())
+        logger.log(logging.INFO, 'Running software version:' + str(current_version))
         print('Running software version:', current_version)
 
     # Read from stdin and get the data that has been sent from start.py
     stdin_payload = loads(stdin.read())
-
-    # Create a manager to manage all our multiprocess queues and events
-    process_manager = Manager()
 
     # Create our Queues to transmit information between processes
     _modbus_to_firebase_queue = process_manager.Queue()
@@ -330,7 +383,10 @@ def main():
                     "firebase_to_modbus_queue": _firebase_to_modbus_queue,
                     "firebase_to_analyse_queue": _firebase_to_analyse_queue,
 
-                    'webanalytics_to_firebase_queue': _webanalytics_to_firebase_queue}
+                    'webanalytics_to_firebase_queue': _webanalytics_to_firebase_queue,
+
+                    'log_queue': _log_queue
+                    }
 
     queue_kwargs.update({'stdin_payload': stdin_payload})
 
@@ -348,8 +404,10 @@ def main():
     firebasecommunications_process = FirebaseCommunications(**queue_kwargs)
     analyse_process = Analyse(**queue_kwargs)
 
+    logger.log(logging.INFO, 'Initialization of processes is done. Starting all processes...')
     print('Initialization of processes is done. Starting all processes...')
 
+    log_listener_process.start()
     webanalytics_process.start()
     firebasecommunications_process.start()
     analyse_process.start()
@@ -446,6 +504,8 @@ def main():
     print(threading.enumerate())
 
     print('We are out of the program')
+
+    log_listener_process.join()
 
     exit(0)
 

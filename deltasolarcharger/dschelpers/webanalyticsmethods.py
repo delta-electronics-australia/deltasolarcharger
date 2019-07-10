@@ -4,10 +4,12 @@ import ast
 import csv
 from datetime import datetime
 
-
 class WebAnalyticsMethods:
-    def __init__(self):
+
+    def __init__(self, log_queue):
         super().__init__()
+        self.log_queue = log_queue
+
         self.today = datetime.now().day
         self.current_analytics_data = dict()
 
