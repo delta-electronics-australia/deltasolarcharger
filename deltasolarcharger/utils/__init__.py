@@ -8,3 +8,12 @@ def log_worker_configurer(log_queue):
     root.addHandler(h)
     # send all messages, for demo; no other level or filter logic applied.
     root.setLevel(logging.DEBUG)
+
+
+def log(*args, level=logging.INFO):
+    logger = logging.getLogger()
+    final_string = ""
+    for item in args:
+        final_string += str(item) + ' '
+
+    logger.log(level, final_string)

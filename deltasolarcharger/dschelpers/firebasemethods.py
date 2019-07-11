@@ -18,6 +18,7 @@ import logging
 import pyrebase
 import websocket
 
+from utils import log
 
 class FactoryResetNotifier(Thread):
     def __init__(self, url):
