@@ -8,6 +8,7 @@ import logging.handlers
 import time
 from datetime import datetime
 from sys import stdin
+import os
 from json import loads
 import traceback
 
@@ -322,6 +323,10 @@ class LogListenerProcess(Process):
 
     def listener_configurer(self):
         root = logging.getLogger()
+
+        if not os.path.isdir("../logs"):
+            os.mkdir("../logs")
+
         h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarcharger.log", when='midnight')
         f = logging.Formatter('%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s')
         h.setFormatter(f)
