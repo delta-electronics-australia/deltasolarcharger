@@ -37,11 +37,11 @@ class FactoryResetNotifier(Thread):
     def on_error(self, error):
         print(error)
 
-    def on_open(self, message):
-        print(message)
+    def on_open(self):
+        pass
 
-    def on_close(self, message):
-        print(message)
+    def on_close(self):
+        pass
 
     def send(self, data):
         try:
@@ -345,7 +345,8 @@ class FirebaseMethods:
         internet_online = False
         while internet_online is False:
             try:
-                response = requests.get("http://www.google.com")
+                print('Sending a request to Google from internet checker')
+                response = requests.get("http://www.google.com", verify=False, timeout=10)
                 print("response code: " + str(response.status_code))
 
                 if response.status_code == 200:
@@ -1089,8 +1090,8 @@ class FirebaseMethods:
                             # If we are online in general then we need to update our evc_inputs charging status
                             self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                                 {temp_chargerID: new_data_charging_status}, self.idToken)
-                        except OSError:
-                            print('charging status - charging time out')
+                        except OSError as e:
+                            print('charging status - charging time out', e)
                             self.handle_internet_check()
 
                     elif new_data_charging_status is False or new_data_charging_status == "plugged":
@@ -1098,8 +1099,8 @@ class FirebaseMethods:
                             # If we are online in general then we need to update our evc_inputs charging status
                             self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                                 {temp_chargerID: new_data_charging_status}, self.idToken)
-                        except OSError:
-                            print('charging status - not charging time out')
+                        except OSError as e:
+                            print('charging status - not charging time out', e)
                             self.handle_internet_check()
 
             elif new[0] == "transaction_alert":
@@ -1185,7 +1186,8 @@ class FirebaseMethods:
                                     self._charger_status_list[temp_chargerID]['charging_timestamp']).remove(
                                     self.idToken)
 
-                            except OSError:
+                            except OSError as e:
+                                print(e)
                                 print('transation alert - stop, charging history analytics time out')
                                 print('transation alert - stop upload charge session time out')
                                 self.handle_internet_check()
@@ -1207,8 +1209,8 @@ class FirebaseMethods:
                         # Update our evc_inputs charging status
                         self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                             {temp_chargerID: is_start_transaction_message}, self.idToken)
-                    except OSError:
-                        print('translation alert end time out')
+                    except OSError as e:
+                        print('translation alert end time out', e)
                         self.handle_internet_check()
 
                 print("Finished our a Transaction message, new charger list:", self._charger_status_list)
@@ -1268,8 +1270,8 @@ class FirebaseMethods:
                         print('Uploading', temp_charger_info, 'to Firebase for', temp_chargerID)
                         self.db.child("users").child(self.uid).child("evc_inputs").child(temp_chargerID).update(
                             {"charger_info": temp_charger_info}, self.idToken)
-                    except OSError:
-                        print('new charger info timeout')
+                    except OSError as e:
+                        print('new charger info timeout', e)
                         self.handle_internet_check()
 
             # Alive is received AFTER EVERY OCPP MESSAGE TO A CHARGE POINT
@@ -1289,8 +1291,8 @@ class FirebaseMethods:
                         # Post our charger to ev_chargers in Firebase
                         self.db.child("users").child(self.uid).child('ev_chargers').update({temp_chargerID: True},
                                                                                            self.idToken)
-                    except OSError:
-                        print('evc_inputs alive true timeout')
+                    except OSError as e:
+                        print('evc_inputs alive true timeout', e)
                         self.handle_internet_check()
 
                 # If alive is True...
@@ -1320,8 +1322,8 @@ class FirebaseMethods:
                             # Todo: make sure this is what we want - especially if we are in the middle of charging
                             self.db.child('users').child(self.uid).child('evc_inputs').child(temp_chargerID).update(
                                 {'alive': False}, self.idToken)
-                        except OSError:
-                            print('evc_inputs alive false timeout')
+                        except OSError as e:
+                            print('evc_inputs alive false timeout', e)
                             self.handle_internet_check()
 
                 print('*****************************************************************')
@@ -1420,8 +1422,8 @@ class FirebaseMethods:
                                          'Battery_SOC': temp_metervalue_entry[7],
                                          'Battery_Temperature': temp_metervalue_entry[8],
                                          'Grid_Power': temp_metervalue_entry[9]}, self.idToken)
-                                except OSError:
-                                    print('Meter value timed out')
+                                except OSError as e:
+                                    print('Meter value timed out', e)
                                     self.handle_internet_check()
 
                 except KeyError as e:
@@ -1463,8 +1465,8 @@ class FirebaseMethods:
                         'chargerID': temp_chargerID,
                         'firmware_update_status': fw_status
                     }, self.idToken)
-                except OSError:
-                    print('Firmware update status notification time out')
+                except OSError as e:
+                    print('Firmware update status notification time out', e)
                     self.handle_internet_check()
 
             elif new[0] == "dsc_firmware_update":
@@ -2073,8 +2075,8 @@ class FirebaseMethods:
                     try:
                         self.db.child("users").child(self.uid).child("live_database").update(firebase_ready_data,
                                                                                              self.idToken)
-                    except OSError:
-                        print('update_firebase live database timed out')
+                    except OSError as e:
+                        print('update_firebase live database timed out', e)
                         self.handle_internet_check()
 
                 # (If we are online) Push data to history so we can bring it up in the future
@@ -2082,8 +2084,8 @@ class FirebaseMethods:
                     try:
                         self.db.child("users").child(self.uid).child("history").child(
                             current_time.strftime("%Y-%m-%d")).push(history_ready_data, self.idToken)
-                    except OSError:
-                        print('update_firebase history timed out')
+                    except OSError as e:
+                        print('update_firebase history timed out', e)
                         self.handle_internet_check()
 
                     self.history_counter = 0
@@ -2153,8 +2155,8 @@ class FirebaseMethods:
                     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').update(
                         {'single_charging_mode': new_charge_mode}, self.idToken)
                     print('Updated charge mode in Firebase - check if web interface is showing this change')
-                except OSError:
-                    print('update_firebase update charge mode timed out')
+                except OSError as e:
+                    print('update_firebase update charge mode timed out', e)
                     self.handle_internet_check()
 
         # Updating analytics requires us to be online
@@ -2168,8 +2170,8 @@ class FirebaseMethods:
                 try:
                     self.db.child("users").child(self.uid).child("analytics/live_analytics").update(payload,
                                                                                                     self.idToken)
-                except OSError:
-                    print('update_firebase live analytics timed out')
+                except OSError as e:
+                    print('update_firebase live analytics timed out', e)
                     self.handle_internet_check()
 
                 self.webanalytics_counter = 0
