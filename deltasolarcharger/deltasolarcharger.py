@@ -129,6 +129,8 @@ class FirebaseCommunications(FirebaseMethods, Process):
     def __init__(self, **kwargs):
         super().__init__(kwargs['firebase_to_analyse_queue'], kwargs['stdin_payload'])
 
+        self.log_queue = kwargs['log_queue']
+
         # Define queues going into FirebaseCommunications
         self.modbus_to_firebase_queue = kwargs['modbus_to_firebase_queue']
         self.analyse_to_firebase_queue = kwargs['analyse_to_firebase_queue']
