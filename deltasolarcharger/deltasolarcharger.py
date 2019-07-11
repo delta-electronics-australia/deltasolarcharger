@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from sys import stdin
 from json import loads
+import traceback
 
 import random
 
@@ -91,7 +92,7 @@ class ModbusCommunications(ModbusMethods):
                 self.modbus_to_webanalytics_queue.put(modbus_data)
                 self._webanalytics_event.set()
 
-                self.logger.log(logging.INFO, "finished one modbus round!")
+                self.logger.info("finished one modbus round!")
                 end = time.time()
                 time.sleep(1 - (end - start))
 
@@ -337,7 +338,6 @@ class LogListenerProcess(Process):
                 logger = logging.getLogger(record.name)
                 logger.handle(record)
             except Exception:
-                import sys, traceback
                 print('Whoops! Problem:', file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
