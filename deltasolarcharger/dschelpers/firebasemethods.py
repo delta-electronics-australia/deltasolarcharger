@@ -34,10 +34,10 @@ class FactoryResetNotifier(Thread):
 
     def on_message(self, message):
         received_message = json.loads(message)
-        print(received_message)
+        log(received_message)
 
     def on_error(self, error):
-        print(error)
+        log(error)
 
     def on_open(self):
         pass
@@ -49,17 +49,17 @@ class FactoryResetNotifier(Thread):
         try:
             self.ws.send(data)
         except BrokenPipeError as e:
-            print(e)
+            log(e)
             return False
 
         except websocket.WebSocketConnectionClosedException as e:
-            print(e)
+            log(e)
             return False
 
         return True
 
     def stop(self):
-        print('Software Update stop signal received')
+        log('Software Update stop signal received')
         self.ws.close()
 
 
@@ -77,10 +77,10 @@ class SoftwareUpdateNotifier(Thread):
 
     def on_message(self, message):
         received_message = json.loads(message)
-        print(received_message)
+        log(received_message)
 
     def on_error(self, error):
-        print(error)
+        log(error)
 
     def on_open(self):
         pass
@@ -92,17 +92,17 @@ class SoftwareUpdateNotifier(Thread):
         try:
             self.ws.send(data)
         except BrokenPipeError as e:
-            print(e)
+            log(e)
             return False
 
         except websocket.WebSocketConnectionClosedException as e:
-            print(e)
+            log(e)
             return False
 
         return True
 
     def stop(self):
-        print('Software Update stop signal received')
+        log('Software Update stop signal received')
         self.ws.close()
 
 
@@ -122,20 +122,20 @@ class OCPPDataBridge(Thread):
                                          on_error=self.on_error,
                                          on_close=self.on_close)
         self.ws.on_open = self.on_open
-        print('Initialized OCPP ws')
+        log('Initialized OCPP ws')
         self.ws.run_forever()
 
     def send(self, data):
         try:
-            # print('Sending data...', data, datetime.now())
+            # log('Sending data...', data, datetime.now())
             self.ws.send(data)
         except BrokenPipeError as e:
-            print(e)
+            log(e)
             self.ws_receiver_stopped_event.set()
             pass
 
         except websocket.WebSocketConnectionClosedException as e:
-            print(e)
+            log(e)
             self.ws_receiver_stopped_event.set()
             pass
 
@@ -144,7 +144,7 @@ class OCPPDataBridge(Thread):
         received_message = json.loads(message)
 
         if 'charging_status' in received_message and received_message['chargerID'] is not None:
-            # print("Received a Status update for", received_message['chargerID'])
+            # log("Received a Status update for", received_message['chargerID'])
 
             self.charger_status_information_bus.put(('charging_status_change',
                                                      {'charging_status': received_message["charging_status"],
@@ -154,7 +154,7 @@ class OCPPDataBridge(Thread):
                                                      received_message['chargerID']))
 
         elif 'transaction_alert' in received_message:
-            print("Received a transaction alert in OCPP ws", received_message)
+            log("Received a transaction alert in OCPP ws", received_message)
             self.charger_status_information_bus.put(('transaction_alert',
                                                      {'charging_status': received_message["transaction_alert"],
                                                       'meterValue': received_message['meterValue'],
@@ -163,12 +163,12 @@ class OCPPDataBridge(Thread):
                                                      received_message['chargerID']))
 
         elif 'new_charger_info' in received_message:
-            print("Received a BOOT NOTIFICATION in OCPP ws", received_message)
+            log("Received a BOOT NOTIFICATION in OCPP ws", received_message)
             self.information_bus.put(
                 ('new_charger_info', received_message["new_charger_info"], received_message['chargerID']))
 
         elif 'fw_status' in received_message:
-            print('Received a Firmware Status Notification in OCPP ws', received_message)
+            log('Received a Firmware Status Notification in OCPP ws', received_message)
             self.information_bus.put(('fw_status', received_message['fw_status'], received_message['chargerID']))
 
         elif 'alive' in received_message:
@@ -182,29 +182,29 @@ class OCPPDataBridge(Thread):
                 ('authorize_request', received_message['authorize_request'], received_message['chargerID']))
 
     def on_open(self):
-        print('OCPP Websocket Receiver open')
+        log('OCPP Websocket Receiver open')
         self.ws_receiver_stopped_event.clear()
 
     def on_close(self):
-        print('OCPP Websocket Receiver closed')
+        log('OCPP Websocket Receiver closed')
 
     def on_error(self, error):
         """ Errors here will trigger the stopped event which will prompt update_external_sources to
          try to reconnect to WS """
 
-        print('Got an error in ws!!', error)
+        log('Got an error in ws!!', error)
 
         # This error will trigger when we try to send a message when it is closed
         if type(error) is websocket.WebSocketConnectionClosedException:
-            print('We got a closed error, lets wait 2 seconds and connect again....')
+            log('We got a closed error, lets wait 2 seconds and connect again....')
             self.ws_receiver_stopped_event.set()
 
         if type(error) is ConnectionRefusedError:
-            print('Connection refused!')
+            log('Connection refused!')
             self.ws_receiver_stopped_event.set()
 
     def stop(self):
-        print('OCPP Websocket stop signal received')
+        log('OCPP Websocket stop signal received')
         self.ws.close()
 
 
@@ -217,7 +217,7 @@ class FirebaseMethods:
         # Define our stdin variables
         self._ONLINE = stdin_payload['online']
         self._LIMIT_DATA = stdin_payload['LIMIT_DATA']
-        print('ONLINE:' + str(self._ONLINE), 'LIMIT DATA: ' + str(self._LIMIT_DATA))
+        log('ONLINE:' + str(self._ONLINE), 'LIMIT DATA: ' + str(self._LIMIT_DATA))
 
         # Define if we are in manual charge control
         self._MANUAL_CHARGE_CONTROL = False
@@ -319,8 +319,8 @@ class FirebaseMethods:
                     break
 
                 except OSError as e:
-                    print('Got an OSError! Lets try to authenticate again')
-                    print(e)
+                    log('Got an OSError! Lets try to authenticate again')
+                    log(e)
                     self.handle_internet_check()
 
             # (If we are online) Handle all of the data syncing
@@ -339,23 +339,23 @@ class FirebaseMethods:
             self.factory_reset_ws.start()
 
         self.logger.info('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!!')
-        print('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
+        log('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
 
     def internet_checker(self):
         """ internet_checker will keep pinging Google until the internet comes back online """
 
-        print('\nWe have entered the internet checker\n')
+        log('\nWe have entered the internet checker\n')
 
         internet_online_counter = 0
         internet_online = False
         while internet_online is False:
             try:
-                print('Sending a request to Google from internet checker')
+                log('Sending a request to Google from internet checker')
                 response = requests.get("http://www.google.com", verify=False, timeout=10)
-                print("response code: " + str(response.status_code))
+                log("response code: " + str(response.status_code))
 
                 if response.status_code == 200:
-                    print('internet online counter:', internet_online_counter)
+                    log('internet online counter:', internet_online_counter)
 
                     # We must be able to ping google.com 20 times before we are allowed to exit
                     if internet_online_counter == 20:
@@ -364,7 +364,7 @@ class FirebaseMethods:
                     internet_online_counter += 1
 
             except requests.ConnectionError:
-                print("Could not connect to the internet, trying again 3 seconds...")
+                log("Could not connect to the internet, trying again 3 seconds...")
                 internet_online = False
                 internet_online_counter = 0
                 time.sleep(2)
@@ -374,13 +374,13 @@ class FirebaseMethods:
         self.refresh_tokens()
         self.perform_file_integrity_check(full_check=False)
 
-        print('\nWe are OUT of internet_checker thread\n')
+        log('\nWe are OUT of internet_checker thread\n')
 
     def handle_internet_check(self):
         """ This function checks if we have a internet checker active. If we don't then make one """
 
         if self.internet_checker_thread is None or not self.internet_checker_thread.isAlive():
-            print('Internet checker thread is None, lets start one!')
+            log('Internet checker thread is None, lets start one!')
             self.internet_checker_thread = Thread(target=self.internet_checker)
             self.internet_checker_thread.name = "INTERNET_CHECKER_THREAD"
             self.internet_checker_thread.daemon = True
@@ -646,7 +646,7 @@ class FirebaseMethods:
                     writer.writerow(data)
 
     def authenticate(self):
-        print('Attempting to authenticate with Firebase')
+        log('Attempting to authenticate with Firebase')
         config = {
             "apiKey": "AIzaSyCaxTOBofd7qrnbas5gGsZcuvy_zNSi_ik",
             "authDomain": "smart-charging-app.firebaseapp.com",
@@ -675,7 +675,7 @@ class FirebaseMethods:
         self.idToken = user['idToken']
         self.refreshToken = user['refreshToken']
 
-        print(self.uid)
+        log(self.uid)
 
         # Check if authentication is all good here.
         authentication_success = True
@@ -701,7 +701,7 @@ class FirebaseMethods:
             self.refresh_timer.daemon = True
             self.refresh_timer.start()
 
-            print('Authentication Success - got a new idToken')
+            log('Authentication Success - got a new idToken')
 
             return authentication_success
 
@@ -745,11 +745,11 @@ class FirebaseMethods:
 
                 # Take the current day, subtract a timedelta
                 if (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d") + '.csv' not in ftp_csv_list:
-                    print('Yesterdays file is not found, we need to fix our inverter log database')
+                    log('Yesterdays file is not found, we need to fix our inverter log database')
                     self.handle_inverter_database()
 
             except error_perm as e:
-                print('oops, doesnt exist, skipping: ', e)
+                log('oops, doesnt exist, skipping: ', e)
 
         # Write our current version to Firebase
         with open('../docs/version.txt', 'r') as f:
@@ -761,71 +761,71 @@ class FirebaseMethods:
         """ This method will refresh tokens and recreate listeners """
 
         self.logger.info('We are refreshing tokens' + str(datetime.now()))
-        print('We are refreshing tokens!', datetime.now())
+        log('We are refreshing tokens!', datetime.now())
 
         # First close existing listeners
         try:
-            # print('charging mode listener before closing:', self.charging_modes_listener.sse.running)
+            # log('charging mode listener before closing:', self.charging_modes_listener.sse.running)
             self.charging_modes_listener.close()
-            # print('charging mode listener successfully closed')
-            # print('charging mode listener after closing:', self.charging_modes_listener.sse.running)
+            # log('charging mode listener successfully closed')
+            # log('charging mode listener after closing:', self.charging_modes_listener.sse.running)
         except AttributeError as e:
-            print(e, 'but continue in refresh_tokens 2')
+            log(e, 'but continue in refresh_tokens 2')
 
         try:
-            # print('buffer listener before closing:', self.buffer_aggressiveness_listener)
+            # log('buffer listener before closing:', self.buffer_aggressiveness_listener)
             self.buffer_aggressiveness_listener.close()
-            # print('buffer listener after closing:', self.buffer_aggressiveness_listener)
+            # log('buffer listener after closing:', self.buffer_aggressiveness_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('firmware listener before closing:', self.update_firmware_listener)
+            # log('firmware listener before closing:', self.update_firmware_listener)
             self.update_firmware_listener.close()
-            # print('firmware listener after closing:', self.update_firmware_listener)
+            # log('firmware listener after closing:', self.update_firmware_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('dsc firmware upgrade listener before closing:', self.dsc_firmware_update_listener)
+            # log('dsc firmware upgrade listener before closing:', self.dsc_firmware_update_listener)
             self.dsc_firmware_update_listener.close()
-            # print('dsc firmware upgrade listener after closing:', self.dsc_firmware_update_listener)
+            # log('dsc firmware upgrade listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('delete_charger_listener before closing:', self.dsc_firmware_update_listener)
+            # log('delete_charger_listener before closing:', self.dsc_firmware_update_listener)
             self.delete_charger_listener.close()
-            # print('delete_charger_listener after closing:', self.dsc_firmware_update_listener)
+            # log('delete_charger_listener after closing:', self.dsc_firmware_update_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('factory_reset_listener before closing:', self.factory_reset_listener)
+            # log('factory_reset_listener before closing:', self.factory_reset_listener)
             self.factory_reset_listener.close()
-            # print('factory_reset_listener after closing:', self.factory_reset_listener)
+            # log('factory_reset_listener after closing:', self.factory_reset_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('manual control listener before closing:', self.misc_listener)
+            # log('manual control listener before closing:', self.misc_listener)
             self.manual_charge_control_listener.close()
-            # print('manual control listener after closing:', self.misc_listener)
+            # log('manual control listener after closing:', self.misc_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
         try:
-            # print('misc listener before closing:', self.misc_listener)
+            # log('misc listener before closing:', self.misc_listener)
             self.misc_listener.close()
-            # print('misc listener after closing:', self.misc_listener)
+            # log('misc listener after closing:', self.misc_listener)
         except AttributeError as e:
-            print(e)
+            log(e)
 
         # Refresh token
-        print('before refresh')
+        log('before refresh')
         user = self.auth.refresh(self.refreshToken)
-        print('after refresh')
+        log('after refresh')
         idToken = user['idToken']
         self.refreshToken = user['refreshToken']
 
         # Put new idToken on the information bus so that the idToken can be updated in the main thread
         self.information_bus.put(('idToken', idToken))
 
-        print('Tokens successfully refreshed')
+        log('Tokens successfully refreshed')
 
     def start_firebase_listeners(self):
         """ This method starts all of our Firebase listeners """
@@ -871,7 +871,7 @@ class FirebaseMethods:
     def firebase_stream_handler(self, message):
         """ Defines the callback due to changes in certain Firebase entries """
 
-        # print('message received', message)
+        # log('message received', message)
 
         if message['stream_id'] == "charging_modes_change" and message['data']:
             # If path is '/' then we know it is initial run or both has been modified
@@ -888,7 +888,7 @@ class FirebaseMethods:
                                                       'authentication_required': message['data'][
                                                           'authentication_required']}))
                     except ConnectionRefusedError as e:
-                        print(e, 'got a connection refused error')
+                        log(e, 'got a connection refused error')
                         pass
 
             elif message['path'] == "/single_charging_mode":
@@ -901,7 +901,7 @@ class FirebaseMethods:
                     self.ocpp_ws.send(json.dumps({'purpose': 'change_authentication_requirement',
                                                   'authentication_required': message['data']}))
                 except ConnectionRefusedError as e:
-                    print(e, 'got a connection refused error')
+                    log(e, 'got a connection refused error')
                     pass
 
         elif message['stream_id'] == "buffer_aggro_change" and message['data']:
@@ -912,7 +912,7 @@ class FirebaseMethods:
             self.information_bus.put(('update_firmware', message['data']))
 
         elif message['stream_id'] == "dsc_firmware_update" and message['data'] is not None:
-            print('hello')
+            log('hello')
 
             self.information_bus.put(('dsc_firmware_update', message['data']))
 
@@ -931,7 +931,7 @@ class FirebaseMethods:
     def respond_to_authorize(self, chargerID):
         """ This function is called when RFID mode is on and user swipes RFID card """
 
-        print('We are now in respond to authorize', chargerID)
+        log('We are now in respond to authorize', chargerID)
 
         counter = 0
         while True:
@@ -940,17 +940,17 @@ class FirebaseMethods:
                 # We now have our target charge rate
                 target_charge_rate = self.charge_rates[chargerID]
 
-                print(chargerID, 'is in our charge rates list with charge rate of:', self.charge_rates[chargerID])
+                log(chargerID, 'is in our charge rates list with charge rate of:', self.charge_rates[chargerID])
                 break
 
             counter += 1
-            print(counter)
+            log(counter)
             # If our charger is not in the list because it has a "Finished" status, we wait 10 seconds
             if counter == 20:
                 # Then we set the target charge rate to 6
                 target_charge_rate = 6
 
-                print('We could not find', chargerID, 'in the list of charge rates, so we are setting it to 6A')
+                log('We could not find', chargerID, 'in the list of charge rates, so we are setting it to 6A')
                 break
 
             time.sleep(0.5)
@@ -966,7 +966,7 @@ class FirebaseMethods:
 
         # If we are in standalone mode with more than 1 active charger, then we reject the incoming charge session
         if num_active_chargers > 1 and latest_modbus_data['inverter_data']['Inverter Status'] == "Stand Alone":
-            print('We have more than one active charger but we are in standalone mode - denying the charge session')
+            log('We have more than one active charger but we are in standalone mode - denying the charge session')
             self.ocpp_ws.send(
                 json.dumps({'chargerID': chargerID, 'purpose': 'authorize_request', 'authorized': False}))
             return
@@ -974,42 +974,42 @@ class FirebaseMethods:
         # But if we are grid connected then we continue with monitoring the charge rate
         counter = 0
         while True:
-            print('Available current is:', self._AVAILABLE_CURRENT, 'current needed is:', target_charge_rate)
+            log('Available current is:', self._AVAILABLE_CURRENT, 'current needed is:', target_charge_rate)
 
             # Check if our available current is greater than our target charge rate
             if self._AVAILABLE_CURRENT > target_charge_rate:
-                print('We have more available current than our target charge rate, lets start charging!')
+                log('We have more available current than our target charge rate, lets start charging!')
 
                 # If we have enough, then we can send a message to OCPP server to accept the authorize request
                 self.ocpp_ws.send(
                     json.dumps({'chargerID': chargerID, 'purpose': 'authorize_request', 'authorized': True}))
 
-                print('Just sent out the message to authorize the charging session!')
+                log('Just sent out the message to authorize the charging session!')
 
                 break
 
             else:
                 # If we have been waiting for 20 seconds or more, we break out of the loop
                 if counter > 40:
-                    print('20 seconds passed, denying access to charger')
+                    log('20 seconds passed, denying access to charger')
                     self.ocpp_ws.send(
                         json.dumps({'chargerID': chargerID, 'purpose': 'authorize_request', 'authorized': False}))
                     break
 
-                print('Not enough current. We are consuming:', self.latest_modbus_data['ac2c'],
+                log('Not enough current. We are consuming:', self.latest_modbus_data['ac2c'],
                       'but we want to charge at', target_charge_rate)
 
             counter += 1
-            print('counter is', counter)
+            log('counter is', counter)
             time.sleep(0.5)
 
-        print('Responded to authorize, exiting thread now')
+        log('Responded to authorize, exiting thread now')
 
     def check_and_initialize_charger_list(self, charger_id):
         """ This function checks if the charger ID is in our list and if it's not then initialize the charger ID """
 
         if charger_id not in self._charger_status_list:
-            print(charger_id, 'not in list, add it now')
+            log(charger_id, 'not in list, add it now')
             # If we don't then we need to add it
             self._charger_status_list.update(
                 {charger_id: {'charging': False, 'charge_rate': None, 'charging_timestamp': None, 'meterStart': None,
@@ -1025,19 +1025,19 @@ class FirebaseMethods:
     def synchronise_charger_status(self):
         """ This function sends a message to the OCPP backend to trigger a StatusNotificaiton for every charger """
         try:
-            print("Sending a Trigger StatusNotification!")
-            # print('Identifier:', unique_id)
+            log("Sending a Trigger StatusNotification!")
+            # log('Identifier:', unique_id)
             self.ocpp_ws.send(json.dumps(
                 {'purpose': 'Trigger_StatusNotification'}))
         except ConnectionRefusedError as e:
-            print(e, 'got a connection refused error')
+            log(e, 'got a connection refused error')
             pass
 
     def check_status_information_bus(self):
         while True:
             if self.charger_status_information_bus.qsize() > 0:
                 new = self.charger_status_information_bus.get()
-                print('New info on charging information bus!', new)
+                log('New info on charging information bus!', new)
             else:
                 break
 
@@ -1049,7 +1049,7 @@ class FirebaseMethods:
                 temp_meterValue = new[1]['meterValue']
                 transaction_id = new[1]['transaction_id']
 
-                print('We are in charging status change for', temp_chargerID)
+                log('We are in charging status change for', temp_chargerID)
 
                 # First check if we have this chargerID in our charger status list
                 if not self.check_and_initialize_charger_list(temp_chargerID):
@@ -1059,14 +1059,14 @@ class FirebaseMethods:
 
                 # Now that charger is in the status list, make sure the new status is different from the old status
                 if self._charger_status_list[temp_chargerID]['charging'] != new_data_charging_status:
-                    print('CHARGE STATUS CHANGED!', new)
+                    log('CHARGE STATUS CHANGED!', new)
 
                     # Then append the new charging status into the charger status list
                     self._charger_status_list[temp_chargerID]['charging'] = new_data_charging_status
 
                     # If timestamps are different, take the timestamp of the backend
                     if self._charger_status_list[temp_chargerID]['charging_timestamp'] != temp_charging_timestamp:
-                        print('There is a charging timestamp mismatch:',
+                        log('There is a charging timestamp mismatch:',
                               self._charger_status_list[temp_chargerID]['charging_timestamp'], temp_charging_timestamp,
                               'taking charging information from the backend!')
                         self._charger_status_list[temp_chargerID]['charging_timestamp'] = temp_charging_timestamp
@@ -1090,14 +1090,14 @@ class FirebaseMethods:
                 # to detect if there is a charging session and update Firebase
                 if self._ONLINE:
                     if new_data_charging_status is True and temp_charging_timestamp:
-                        print('The charging timestamp received is', temp_charging_timestamp, 'continuing...')
+                        log('The charging timestamp received is', temp_charging_timestamp, 'continuing...')
 
                         try:
                             # If we are online in general then we need to update our evc_inputs charging status
                             self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                                 {temp_chargerID: new_data_charging_status}, self.idToken)
                         except OSError as e:
-                            print('charging status - charging time out', e)
+                            log('charging status - charging time out', e)
                             self.handle_internet_check()
 
                     elif new_data_charging_status is False or new_data_charging_status == "plugged":
@@ -1106,12 +1106,12 @@ class FirebaseMethods:
                             self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                                 {temp_chargerID: new_data_charging_status}, self.idToken)
                         except OSError as e:
-                            print('charging status - not charging time out', e)
+                            log('charging status - not charging time out', e)
                             self.handle_internet_check()
 
             elif new[0] == "transaction_alert":
                 """ If there is a StartTransaction or StopTransaction message """
-                print('Got a transaction alert on information bus for', new[2])
+                log('Got a transaction alert on information bus for', new[2])
 
                 temp_chargerID = new[2]
                 is_start_transaction_message = new[1]['charging_status']
@@ -1147,7 +1147,7 @@ class FirebaseMethods:
                                 temp_chargerID).child(charging_timestamp.split(' ')[0]).update(
                                 {charging_timestamp.split(' ')[1]: True}, self.idToken)
                         except OSError:
-                            print('transaction_alert - start charging history keys time out')
+                            log('transaction_alert - start charging history keys time out')
                             self.handle_internet_check()
                             # Todo: put this in the once-online to do queue
 
@@ -1165,7 +1165,7 @@ class FirebaseMethods:
                                 self._charger_status_list[temp_chargerID]['charging_timestamp'], '%Y-%m-%d %H%M')
                             total_charge_duration = total_charge_duration.total_seconds()
 
-                            print('We have a stop transaction, total charge duration is', total_charge_duration)
+                            log('We have a stop transaction, total charge duration is', total_charge_duration)
                             # Upload our analytics to analytics->charging_history_analytics->chargerID->date->time
                             try:
                                 self.db.child("users").child(self.uid).child(
@@ -1193,16 +1193,16 @@ class FirebaseMethods:
                                     self.idToken)
 
                             except OSError as e:
-                                print(e)
-                                print('transation alert - stop, charging history analytics time out')
-                                print('transation alert - stop upload charge session time out')
+                                log(e)
+                                log('transation alert - stop, charging history analytics time out')
+                                log('transation alert - stop upload charge session time out')
                                 self.handle_internet_check()
                                 # Todo: Make sure we add this to the once-online todo queue
 
                         except TypeError as e:
                             # If we get a TypeError it is because our OCPP server crashed. For now, remove all traces
                             # of the charging session
-                            print(e)
+                            log(e)
 
                     self._charger_status_list[temp_chargerID]['charging_timestamp'] = None
                     self._charger_status_list[temp_chargerID]['meterStart'] = None
@@ -1216,10 +1216,10 @@ class FirebaseMethods:
                         self.db.child("users").child(self.uid).child("evc_inputs/charging").update(
                             {temp_chargerID: is_start_transaction_message}, self.idToken)
                     except OSError as e:
-                        print('translation alert end time out', e)
+                        log('translation alert end time out', e)
                         self.handle_internet_check()
 
-                print("Finished our a Transaction message, new charger list:", self._charger_status_list)
+                log("Finished our a Transaction message, new charger list:", self._charger_status_list)
 
             elif new[0] == "authorize_request":
                 temp_chargerID = new[2]
@@ -1233,18 +1233,18 @@ class FirebaseMethods:
         # Try to grab something from the information bus
         try:
             new = self.information_bus.get_nowait()
-            # print('New info on information bus!', new)
+            # log('New info on information bus!', new)
 
             # If the info bus payload is about idToken then we refresh our listeners with the new idToken
             if new[0] == "idToken":
-                print('I FOUND A NEW IDTOKEN!')
+                log('I FOUND A NEW IDTOKEN!')
 
                 self.idToken = new[1]
                 # Now that we have a new refreshToken, we need to stop all the current listeners and recreate them
                 self.start_firebase_listeners()
 
                 if self.refresh_timer.isAlive():
-                    print('Timer is still alive, cancel it first')
+                    log('Timer is still alive, cancel it first')
                     self.refresh_timer.cancel()
 
                 self.refresh_timer = Timer(2400, self.refresh_tokens)
@@ -1252,7 +1252,7 @@ class FirebaseMethods:
                 self.refresh_timer.start()
 
             elif new[0] == "new_charger_info":
-                print('We got new charger info', new)
+                log('We got new charger info', new)
                 temp_charger_info = new[1]
                 temp_chargerID = new[2]
 
@@ -1267,22 +1267,22 @@ class FirebaseMethods:
                                                       'action': "ChangeConfiguration",
                                                       'misc_data': {"key": "MeterValueSampleInterval", "value": "10"}}))
                 except ConnectionRefusedError as e:
-                    print(e, 'got a connection refused error')
+                    log(e, 'got a connection refused error')
                     pass
 
                 # (If we are online) We update the information about our charger in Firebase
                 if self._ONLINE:
                     try:
-                        print('Uploading', temp_charger_info, 'to Firebase for', temp_chargerID)
+                        log('Uploading', temp_charger_info, 'to Firebase for', temp_chargerID)
                         self.db.child("users").child(self.uid).child("evc_inputs").child(temp_chargerID).update(
                             {"charger_info": temp_charger_info}, self.idToken)
                     except OSError as e:
-                        print('new charger info timeout', e)
+                        log('new charger info timeout', e)
                         self.handle_internet_check()
 
             # Alive is received AFTER EVERY OCPP MESSAGE TO A CHARGE POINT
             elif new[0] == "alive":
-                print('New info on information bus!', new)
+                log('New info on information bus!', new)
 
                 temp_chargerID = new[2]
                 temp_alive = new[1]
@@ -1298,7 +1298,7 @@ class FirebaseMethods:
                         self.db.child("users").child(self.uid).child('ev_chargers').update({temp_chargerID: True},
                                                                                            self.idToken)
                     except OSError as e:
-                        print('evc_inputs alive true timeout', e)
+                        log('evc_inputs alive true timeout', e)
                         self.handle_internet_check()
 
                 # If alive is True...
@@ -1308,17 +1308,17 @@ class FirebaseMethods:
                         # Send a request to synchronise all charge points with OCPP backend
                         self.synchronise_charger_status()
                         # try:
-                        #     print("Sending a Trigger StatusNotification!")
-                        #     # print('Identifier:', unique_id)
+                        #     log("Sending a Trigger StatusNotification!")
+                        #     # log('Identifier:', unique_id)
                         #     self.ocpp_ws.send(json.dumps(
                         #         {'purpose': 'Trigger_StatusNotification'}))
                         # except ConnectionRefusedError as e:
-                        #     print(e, 'got a connection refused error')
+                        #     log(e, 'got a connection refused error')
                         #     pass
 
                 # If alive is False (charger gone offline), we must remove it from the list
                 else:
-                    print('Alive is false, removing', temp_chargerID)
+                    log('Alive is false, removing', temp_chargerID)
                     if temp_chargerID in self._charger_status_list:
                         del self._charger_status_list[temp_chargerID]
 
@@ -1329,14 +1329,14 @@ class FirebaseMethods:
                             self.db.child('users').child(self.uid).child('evc_inputs').child(temp_chargerID).update(
                                 {'alive': False}, self.idToken)
                         except OSError as e:
-                            print('evc_inputs alive false timeout', e)
+                            log('evc_inputs alive false timeout', e)
                             self.handle_internet_check()
 
-                print('*****************************************************************')
-                print(datetime.now().strftime('%H:%M:%S'), 'Update on our charger status list:')
+                log('*****************************************************************')
+                log(datetime.now().strftime('%H:%M:%S'), 'Update on our charger status list:')
                 for chargerID, payload in self._charger_status_list.items():
-                    print(chargerID, ' ', payload)
-                print('*****************************************************************')
+                    log(chargerID, ' ', payload)
+                log('*****************************************************************')
 
             elif new[0] == "meter_values":
                 # Define the dictionary that contains all of the electrical info
@@ -1354,18 +1354,18 @@ class FirebaseMethods:
 
                         charging_timestamp_obj = datetime.strptime(temp_charging_timestamp, '%Y-%m-%dT%H:%M:%SZ')
                         timestamp_delta = datetime.now() - charging_timestamp_obj
-                        print('Our timestamp delta will be for this metervalue message is: ', timestamp_delta.seconds)
+                        log('Our timestamp delta will be for this metervalue message is: ', timestamp_delta.seconds)
 
                         # If timestamp is less than 2 minutes off server time, use server time as current timestamp
                         if timestamp_delta.seconds < 120:
-                            print('Our metervalues message is live. Using server time as the timestamp')
+                            log('Our metervalues message is live. Using server time as the timestamp')
                             final_metervalue_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
                         else:
-                            print('Our metervalues message is not live. Using the message timestamp')
+                            log('Our metervalues message is not live. Using the message timestamp')
                             final_metervalue_timestamp = str(
                                 datetime.strptime(temp_charging_timestamp, '%Y-%m-%dT%H:%M:%SZ'))
 
-                        print('Got a metervalue message and it belongs to', temp_chargerID, 'of charging timestamp:',
+                        log('Got a metervalue message and it belongs to', temp_chargerID, 'of charging timestamp:',
                               self._charger_status_list[temp_chargerID]['charging_timestamp'])
 
                         # Initialize a list that is 11 entries long
@@ -1429,11 +1429,11 @@ class FirebaseMethods:
                                          'Battery_Temperature': temp_metervalue_entry[8],
                                          'Grid_Power': temp_metervalue_entry[9]}, self.idToken)
                                 except OSError as e:
-                                    print('Meter value timed out', e)
+                                    log('Meter value timed out', e)
                                     self.handle_internet_check()
 
                 except KeyError as e:
-                    print('charger ID does not exist in charger list yet', e)
+                    log('charger ID does not exist in charger list yet', e)
 
             elif new[0] == "update_firmware":
                 data = new[1]
@@ -1444,7 +1444,7 @@ class FirebaseMethods:
                         # Use the included chargerID to look up the charger model
                         charger_model = self.db.child("users").child(self.uid).child('evc_inputs').child(
                             data['chargerID']).child('charger_info/chargePointModel').get(self.idToken).val()
-                        print('We have identified that the charger model is:', charger_model)
+                        log('We have identified that the charger model is:', charger_model)
 
                         # Send the request to the OCPP server
                         self.ocpp_ws.send(json.dumps(
@@ -1459,7 +1459,7 @@ class FirebaseMethods:
                             self.idToken)
 
                     except OSError as e:
-                        print('Update Firmware time out', e)
+                        log('Update Firmware time out', e)
                         self.handle_internet_check()
 
             elif new[0] == "fw_status":
@@ -1472,11 +1472,11 @@ class FirebaseMethods:
                         'firmware_update_status': fw_status
                     }, self.idToken)
                 except OSError as e:
-                    print('Firmware update status notification time out', e)
+                    log('Firmware update status notification time out', e)
                     self.handle_internet_check()
 
             elif new[0] == "dsc_firmware_update":
-                print('got a dsc firmware update in info bus')
+                log('got a dsc firmware update in info bus')
                 # First delete the entry
                 self.db.child('users').child(self.uid).child("evc_inputs").child("dsc_firmware_update").remove(
                     self.idToken)
@@ -1501,7 +1501,7 @@ class FirebaseMethods:
                 charger_id = new[1]
 
                 if charger_id is not None:
-                    print('Deleting charger with charger ID:', charger_id)
+                    log('Deleting charger with charger ID:', charger_id)
 
                     # Remove the charger ID from our charging logs
                     if os.path.exists('/home/pi/deltasolarcharger/data/charging_logs/' + charger_id):
@@ -1568,7 +1568,7 @@ class FirebaseMethods:
                 manual_charge_charger_id = new[1]['chargerID']
 
                 if manual_charge_rate == 0:
-                    print('Our manual charge rate is 0, turning manual charge control off')
+                    log('Our manual charge rate is 0, turning manual charge control off')
                     self._MANUAL_CHARGE_CONTROL = False
 
                 else:
@@ -1577,7 +1577,7 @@ class FirebaseMethods:
                     # We need to check if the charger ID is in our status list
                     if manual_charge_charger_id in self._charger_status_list:
                         try:
-                            print("We have a new manual charge rate!", manual_charge_rate)
+                            log("We have a new manual charge rate!", manual_charge_rate)
 
                             unique_id = random.randint(0, 10000)
                             self.ocpp_ws.send(json.dumps(
@@ -1586,7 +1586,7 @@ class FirebaseMethods:
                                  'charge_rate': manual_charge_rate}))
 
                         except ConnectionRefusedError as e:
-                            print(e, 'got a connection refused error')
+                            log(e, 'got a connection refused error')
                             pass
 
             elif new[0] == "misc_command":
@@ -1604,7 +1604,7 @@ class FirebaseMethods:
                                                       'action': data['action'],
                                                       'misc_data': data['misc_data']}))
                     except ConnectionRefusedError as e:
-                        print(e, 'got a connection refused error')
+                        log(e, 'got a connection refused error')
                         pass
 
                 self.db.child("users").child(self.uid).child('evc_inputs/misc_command').remove(self.idToken)
@@ -1621,11 +1621,11 @@ class FirebaseMethods:
                 ftp.cwd(directory)
                 _directory_check_passed = True
             except error_perm as e:
-                print('oops, doesnt exist: ', e)
+                log('oops, doesnt exist: ', e)
                 ftp.mkd(directory)
 
     def ftp_upload_charge_session(self, charger_id, charging_timestamp):
-        print('Uploading', charging_timestamp, 'from', charger_id)
+        log('Uploading', charging_timestamp, 'from', charger_id)
 
         try:
             with FTP(host=self._FTP_HOST) as ftp:
@@ -1640,7 +1640,7 @@ class FirebaseMethods:
                     ftp.storbinary('STOR ' + filename, file)
 
         except FileNotFoundError:
-            print('Tried to upload but we got a FileNotFound Error!')
+            log('Tried to upload but we got a FileNotFound Error!')
 
             # If file is not found, then we have no MeterValue so no .csv file, so we delete this charge session
             charge_date = charging_timestamp.split(' ')[0]
@@ -1658,7 +1658,7 @@ class FirebaseMethods:
 
     def handle_charging_database(self, full_check=True):
         """ This ensures that all of the local csv charging history logs are in the ftp server """
-        print('Checking our charging log databse now...')
+        log('Checking our charging log databse now...')
 
         local_charging_folder_list = os.listdir('../data/charging_logs/')
 
@@ -1668,12 +1668,12 @@ class FirebaseMethods:
             ############################################################################################################
             # First check if the files stored locally are also stored on the FTP server
             ############################################################################################################
-            print('\nChecking if the file stored locally is also stored on the FTP server')
+            log('\nChecking if the file stored locally is also stored on the FTP server')
 
             self.check_and_make_ftp_dir(ftp, "/EVCS_portal/logs/" + self.uid)
 
             for charger_id in local_charging_folder_list:
-                print('Looking at charging sessions for:', charger_id)
+                log('Looking at charging sessions for:', charger_id)
                 local_csv_list = os.listdir('../data/charging_logs/' + charger_id)
 
                 # If we are doing a full check, we take our complete local csv list.
@@ -1695,7 +1695,7 @@ class FirebaseMethods:
 
                 # Loop through the charging sessions stored locally for this charger ID
                 for filename in final_local_csv_list:
-                    print(filename)
+                    log(filename)
 
                     # Check if our local csv file is in the ftp csv charging log list
                     if filename in ftp_csv_list:
@@ -1704,15 +1704,15 @@ class FirebaseMethods:
 
                         # Then get the size of the log that is stored locally
                         filesize_local = os.path.getsize('../data/charging_logs/' + charger_id + '/' + filename)
-                        print('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
+                        log('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
 
                         if filesize_ftp != filesize_local:
-                            print('local and ftp are not the same, updating ftp')
+                            log('local and ftp are not the same, updating ftp')
                             with open('../data/charging_logs/' + charger_id + '/' + filename, 'rb') as file:
                                 ftp.storbinary('STOR ' + filename, file)
                         else:
                             # File sizes are the same. Don't need to do anything
-                            print('File sizes are the same. Moving to the next date...')
+                            log('File sizes are the same. Moving to the next date...')
 
                     # If the file does not exist on the ftp server AND the file does not belong to a
                     # current charging session, we need to upload it
@@ -1720,14 +1720,14 @@ class FirebaseMethods:
                         if (charger_id not in self._charger_status_list) or (not self._charger_status_list[charger_id][
                             'charging'] and self._charger_status_list[charger_id]['charging_timestamp'] !=
                                                                              filename.split('.')[0]):
-                            print(filename, 'does not exist on ftp server, upload it now')
+                            log(filename, 'does not exist on ftp server, upload it now')
                             with open('../data/charging_logs/' + charger_id + '/' + filename, 'rb') as file:
                                 ftp.storbinary('STOR ' + filename, file)
 
                 ########################################################################################################
                 # Now we need to make sure that the FTP server does not have any files that local does not have
                 ########################################################################################################
-                print('\nMaking sure that FTP server does not have any files that the local device does not have')
+                log('\nMaking sure that FTP server does not have any files that the local device does not have')
 
                 ftp_csv_list = ftp.nlst()
 
@@ -1741,12 +1741,12 @@ class FirebaseMethods:
                 for filename in final_ftp_csv_list:
                     if filename not in local_csv_list:
                         ftp.delete(filename)
-                        print('Deleted', filename, 'from ftp as it was not on the local device')
+                        log('Deleted', filename, 'from ftp as it was not on the local device')
 
                 ########################################################################################################
                 # Make sure Firebase does not have any keys for charging sessions that don't exist locally
                 ########################################################################################################
-                print('\nMaking sure that charging history keys does not have any keys that dont exist locally')
+                log('\nMaking sure that charging history keys does not have any keys that dont exist locally')
 
                 # First get the charging history keys payload for the current charger ID
                 try:
@@ -1754,7 +1754,7 @@ class FirebaseMethods:
                         "charging_history_keys").child(charger_id).get(self.idToken).val()
                 except AttributeError as e:
                     firebase_charging_history_keys_payload = {}
-                    print('No payload for this charger ID', e)
+                    log('No payload for this charger ID', e)
 
                 if full_check:
                     final_firebase_charging_history_keys_payload = firebase_charging_history_keys_payload
@@ -1767,7 +1767,7 @@ class FirebaseMethods:
                         OrderedDict(sorted(firebase_charging_history_keys_payload.items(), key=lambda item: item[0],
                                            reverse=True)).items())[0:5])
 
-                    # print(final_firebase_charging_history_keys_payload)
+                    # log(final_firebase_charging_history_keys_payload)
                     # if firebase_charging_history_keys_payload:
                     #     final_firebase_charging_history_keys_payload = OrderedDict(
                     #         list(firebase_charging_history_keys_payload.items())[-5:])
@@ -1782,11 +1782,11 @@ class FirebaseMethods:
                             # Define the csv name that we will be looking for in the local folder
                             firebase_csv_name = date + ' ' + charging_time + '.csv'
 
-                            print('Checking:', firebase_csv_name, 'from Firebase')
+                            log('Checking:', firebase_csv_name, 'from Firebase')
 
                             # If csv file name from charging history keys doesn't exist locally, then delete the key
                             if firebase_csv_name not in local_csv_list:
-                                print(charger_id, date, charging_time,
+                                log(charger_id, date, charging_time,
                                       'does not exist locally, delete the Firebase key')
 
                                 # Remove the charging history key
@@ -1801,11 +1801,11 @@ class FirebaseMethods:
                 ########################################################################################################
                 # Now make sure that Firebase charging_history_keys contains all the charge sessions stored locally
                 ########################################################################################################
-                print('\nNow checking if charging history keys contains all of the charging sessions stored locally')
+                log('\nNow checking if charging history keys contains all of the charging sessions stored locally')
 
                 # Loop through all of the charging sessions stored locally for this charger ID
                 for filename in final_local_csv_list:
-                    print('Checking if', filename, 'exists in charging history keys')
+                    log('Checking if', filename, 'exists in charging history keys')
 
                     # Split out filename into charging date and charging time
                     charging_date = filename.split('.')[0].split(' ')[0]
@@ -1817,13 +1817,13 @@ class FirebaseMethods:
                         # If it does exist, then check if the charging time is NOT in the charging date
                         if charging_time not in firebase_charging_history_keys_payload[charging_date]:
                             # If it is not, then we know to add it into Firebase
-                            print(filename, 'does not exist. Lets add it')
+                            log(filename, 'does not exist. Lets add it')
                             self.db.child("users").child(self.uid).child("charging_history_keys").child(
                                 charger_id).child(charging_date).update({charging_time: True}, self.idToken)
 
                     # If our charging date does not exist, then we should add the charging session by default
                     else:
-                        print(charging_date, 'does not exist in charging history keys. Must add charging session')
+                        log(charging_date, 'does not exist in charging history keys. Must add charging session')
                         self.db.child("users").child(self.uid).child("charging_history_keys").child(
                             charger_id).child(charging_date).update({charging_time: True}, self.idToken)
 
@@ -1845,7 +1845,7 @@ class FirebaseMethods:
 
             with open('../data/logs/' + csv_filename) as csvfile:
                 if '\0' in csvfile.read():
-                    print('We found a null byte, lets fix it')
+                    log('We found a null byte, lets fix it')
 
                     # Reset our csv iterator
                     csvfile.seek(0)
@@ -1869,14 +1869,14 @@ class FirebaseMethods:
                         if len(row) != 0:
                             writer.writerow(row)
 
-                print('Fixed the csv file!!')
+                log('Fixed the csv file!!')
 
         except FileNotFoundError as e:
-            print('File doesnt exist! Skipping integrity check')
+            log('File doesnt exist! Skipping integrity check')
 
     def handle_inverter_database(self, full_check=True):
         """ This ensures that all of the local csv files are in the FTP server """
-        print('\nChecking our inverter_logs database now...')
+        log('\nChecking our inverter_logs database now...')
 
         # Post the current date to history_keys
         self.db.child("users").child(self.uid).child("history_keys").update(
@@ -1907,7 +1907,7 @@ class FirebaseMethods:
 
                     # Files with only one row don't have any data, so we need to delete inverter history file
                     if row_count == 1:
-                        print(filename, 'only has one row. We need to delete the csv file')
+                        log(filename, 'only has one row. We need to delete the csv file')
                         os.remove('../data/logs/' + filename)
 
         # Refresh our list of the .csv files in the local directory
@@ -1939,7 +1939,7 @@ class FirebaseMethods:
             for filename in final_local_csv_list:
                 # If the looped date is NOT today
                 if filename.split('.')[0] != datetime.now().strftime("%Y-%m-%d"):
-                    print(filename, 'is a valid date. Checking integrity of csv on our server...')
+                    log(filename, 'is a valid date. Checking integrity of csv on our server...')
 
                     # First check if the file exists in the ftp server
                     if filename in ftp_csv_list:
@@ -1947,18 +1947,18 @@ class FirebaseMethods:
                         # If they mismatch, upload the local one of that date to the ftp server
                         filesize_ftp = ftp.size(filename)
                         filesize_local = os.path.getsize('../data/logs/' + filename)
-                        print('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
+                        log('ftp filesize =', filesize_ftp, 'compared to local:', filesize_local)
                         if filesize_ftp != filesize_local:
-                            print('local and ftp are not the same, updating ftp')
+                            log('local and ftp are not the same, updating ftp')
                             with open('../data/logs/' + filename, 'rb') as file:
                                 ftp.storbinary('STOR ' + filename, file)
                         else:
                             # File sizes are the same. Don't need to do anything
-                            print('File sizes are the same. Moving to the next date...')
+                            log('File sizes are the same. Moving to the next date...')
 
                     # If the file does not exist on the ftp server (something has gone wrong), we need to upload it
                     else:
-                        print(filename, 'does not exist on ftp server, upload it now')
+                        log(filename, 'does not exist on ftp server, upload it now')
                         with open('../data/logs/' + filename, 'rb') as file:
                             ftp.storbinary('STOR ' + filename, file)
 
@@ -1979,7 +1979,7 @@ class FirebaseMethods:
                 # If the file in the ftp server is not in the complete local csv list, then we can delete it from FTP
                 if filename not in local_csv_list:
                     ftp.delete(filename)
-                    print('Deleted', filename, 'from ftp as it was not on the local device')
+                    log('Deleted', filename, 'from ftp as it was not on the local device')
 
         ################################################################################################################
         # Now that the FTP server has been synced with the local files, make sure Firebase has the correct keys
@@ -1990,7 +1990,7 @@ class FirebaseMethods:
 
         except AttributeError as e:
             firebase_csv_list = []
-            print('None detected!', e)
+            log('None detected!', e)
 
         # If we are doing a full check then we get all history_keys
         if full_check:
@@ -2004,10 +2004,10 @@ class FirebaseMethods:
         # Remove all entries in Firebase that are not in the local directory and do not belong to today
         ################################################################################################################
         for firebase_csv_name in final_firebase_csv_list:
-            print('Checking:', firebase_csv_name, 'from Firebase')
+            log('Checking:', firebase_csv_name, 'from Firebase')
             if (firebase_csv_name + '.csv' not in local_csv_list) and firebase_csv_name != datetime.now().strftime(
                     "%Y-%m-%d"):
-                print('I cant find ' + firebase_csv_name + "in", local_csv_list, 'remove it from Firebase')
+                log('I cant find ' + firebase_csv_name + "in", local_csv_list, 'remove it from Firebase')
                 self.db.child("users").child(self.uid).child("history_keys").child(firebase_csv_name).remove(
                     self.idToken)
 
@@ -2017,7 +2017,7 @@ class FirebaseMethods:
         for filename in final_local_csv_list:
             shortened_filename = filename.split('.')[0]
             if shortened_filename not in firebase_csv_list:
-                print(shortened_filename, 'is not in', firebase_csv_list, 'lets upload it')
+                log(shortened_filename, 'is not in', firebase_csv_list, 'lets upload it')
                 self.db.child("users").child(self.uid).child("history_keys").update({shortened_filename: True},
                                                                                     self.idToken)
         ################################################################################################################
@@ -2028,12 +2028,12 @@ class FirebaseMethods:
 
         # # Finally we need to delete the unnecessary entries in history to save space
         # for firebase_csv_name in firebase_csv_list:
-        #     print('Checking:', firebase_csv_name, 'from history')
+        #     log('Checking:', firebase_csv_name, 'from history')
         #     if firebase_csv_name != datetime.now().strftime("%Y-%m-%d"):
         #         self.db.child("users").child(self.uid).child("history").child(firebase_csv_name).remove(self.idToken
         #         )
         #     else:
-        #         print(firebase_csv_name, 'it is today, dont need to delete')
+        #         log(firebase_csv_name, 'it is today, dont need to delete')
 
     def update_external_sources(self, update_package):
         """ This function updates all of the different Firebase lists with up to date data """
@@ -2082,7 +2082,7 @@ class FirebaseMethods:
                         self.db.child("users").child(self.uid).child("live_database").update(firebase_ready_data,
                                                                                              self.idToken)
                     except OSError as e:
-                        print('update_firebase live database timed out', e)
+                        log('update_firebase live database timed out', e)
                         self.handle_internet_check()
 
                 # (If we are online) Push data to history so we can bring it up in the future
@@ -2091,7 +2091,7 @@ class FirebaseMethods:
                         self.db.child("users").child(self.uid).child("history").child(
                             current_time.strftime("%Y-%m-%d")).push(history_ready_data, self.idToken)
                     except OSError as e:
-                        print('update_firebase history timed out', e)
+                        log('update_firebase history timed out', e)
                         self.handle_internet_check()
 
                     self.history_counter = 0
@@ -2100,7 +2100,7 @@ class FirebaseMethods:
 
         # WebSocket is local so we do not have to be online
         elif label == "update_charge_rate":
-            # print('Got a update charge rate payload', payload)
+            # log('Got a update charge rate payload', payload)
 
             # charge_rates will be the list of new charge rates that should be delivered to the charger through ws
             self.charge_rates = payload['charge_rates']
@@ -2116,7 +2116,7 @@ class FirebaseMethods:
                     # Only send our charge rate to websocket if we are not in manual charge control
                     if not self._MANUAL_CHARGE_CONTROL:
                         for chargerID in self.charge_rates:
-                            print('Looking at', chargerID, 'with a charge rate of', self.charge_rates[chargerID])
+                            log('Looking at', chargerID, 'with a charge rate of', self.charge_rates[chargerID])
 
                             unique_id = random.randint(0, 1000)
                             try:
@@ -2126,7 +2126,7 @@ class FirebaseMethods:
                                      'charge_rate': self.charge_rates[chargerID]}))
 
                             except websocket.WebSocketConnectionClosedException as e:
-                                print(e)
+                                log(e)
 
                             # Double check to makes sure the chargerID has not disconnected
                             if chargerID in self._charger_status_list:
@@ -2135,34 +2135,34 @@ class FirebaseMethods:
 
                 # If there is no connection, then we just pass.
                 except ConnectionRefusedError as e:
-                    print(e, 'got a connection refused error')
+                    log(e, 'got a connection refused error')
                     pass
 
             else:
                 # If ws receiver stopped event is set then we need to try to restart
                 self.ocpp_ws.stop()
 
-                print('stopped!', self.ocpp_ws)
+                log('stopped!', self.ocpp_ws)
                 self.ocpp_ws = OCPPDataBridge("ws://127.0.0.1:8000/ocpp_data_service/", self.information_bus,
                                               self.charger_status_information_bus,
                                               self.ws_receiver_stopped_event)
                 self.ocpp_ws.name = 'OCPPWS'
                 self.ocpp_ws.daemon = True
                 self.ocpp_ws.start()
-                print('Started a new OCPP WS Receiver')
+                log('Started a new OCPP WS Receiver')
 
         elif label == "update_charge_mode":
             new_charge_mode = payload
 
-            print('Updating the charge mode from analyze_to_firebase queue')
+            log('Updating the charge mode from analyze_to_firebase queue')
             # (If we are online) then we update our charge mode in Firebase
             if self._ONLINE:
                 try:
                     self.db.child("users").child(self.uid).child('evc_inputs/charging_modes').update(
                         {'single_charging_mode': new_charge_mode}, self.idToken)
-                    print('Updated charge mode in Firebase - check if web interface is showing this change')
+                    log('Updated charge mode in Firebase - check if web interface is showing this change')
                 except OSError as e:
-                    print('update_firebase update charge mode timed out', e)
+                    log('update_firebase update charge mode timed out', e)
                     self.handle_internet_check()
 
         # Updating analytics requires us to be online
@@ -2171,13 +2171,13 @@ class FirebaseMethods:
 
             # We will update analytics data every "webanalytics_counter_max" seconds
             if self.webanalytics_counter == self.webanalytics_counter_max:
-                print('updating analytics')
+                log('updating analytics')
 
                 try:
                     self.db.child("users").child(self.uid).child("analytics/live_analytics").update(payload,
                                                                                                     self.idToken)
                 except OSError as e:
-                    print('update_firebase live analytics timed out', e)
+                    log('update_firebase live analytics timed out', e)
                     self.handle_internet_check()
 
                 self.webanalytics_counter = 0
