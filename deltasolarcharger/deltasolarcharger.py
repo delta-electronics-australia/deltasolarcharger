@@ -93,7 +93,6 @@ class ModbusCommunications(ModbusMethods):
                 self.modbus_to_webanalytics_queue.put(modbus_data)
                 self._webanalytics_event.set()
 
-                self.logger.info("finished one modbus round!")
                 end = time.time()
                 time.sleep(1 - (end - start))
 
