@@ -16,7 +16,7 @@ import random
 from requests.exceptions import HTTPError, SSLError, ConnectionError
 from requests.packages.urllib3.exceptions import NewConnectionError, MaxRetryError
 
-from deltasolarcharger.utils import log_worker_configurer
+from utils import log_worker_configurer
 
 # Add dschelpers into our path
 import sys
