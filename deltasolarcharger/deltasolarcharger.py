@@ -252,7 +252,7 @@ class Analyse(Process):
 # WebAnalytics process handles all calculations for analytics displayed on the web
 class WebAnalytics(WebAnalyticsMethods, Process):
     def __init__(self, **kwargs):
-        super().__init__()
+        super().__init__(kwargs['log_queue'])
 
         # Define our stdin variables
         stdin_payload = kwargs['stdin_payload']
