@@ -6,10 +6,8 @@ from datetime import datetime
 
 class WebAnalyticsMethods:
 
-    def __init__(self, log_queue):
+    def __init__(self):
         super().__init__()
-        self.log_queue = log_queue
-
         self.today = datetime.now().day
         self.current_analytics_data = dict()
 

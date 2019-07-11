@@ -119,7 +119,6 @@ class ModbusCommunications(ModbusMethods):
                 self.initiate_parameters(1, 5)
 
     def run(self):
-        log_worker_configurer(self.log_queue)
         self.logger = logging.getLogger()
 
         self.start_transmission()
@@ -154,6 +153,7 @@ class FirebaseCommunications(FirebaseMethods, Process):
         return self._stop_event.is_set()
 
     def run(self):
+        log_worker_configurer(self.log_queue)
         while True:
             # Check if a stop event has been raised and then break out
             if self.stopped():
@@ -253,7 +253,7 @@ class Analyse(Process):
 # WebAnalytics process handles all calculations for analytics displayed on the web
 class WebAnalytics(WebAnalyticsMethods, Process):
     def __init__(self, **kwargs):
-        super().__init__(kwargs['log_queue'])
+        super().__init__()
 
         # Define our stdin variables
         stdin_payload = kwargs['stdin_payload']
@@ -352,6 +352,8 @@ def main():
     process_manager = Manager()
     _log_queue = process_manager.Queue()
     log_listener_process = LogListenerProcess(_log_queue)
+    log_listener_process.start()
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
     log_worker_configurer(_log_queue)
     logger = logging.getLogger()
@@ -412,7 +414,6 @@ def main():
     logger.log(logging.INFO, 'Initialization of processes is done. Starting all processes...')
     print('Initialization of processes is done. Starting all processes...')
 
-    log_listener_process.start()
     webanalytics_process.start()
     firebasecommunications_process.start()
     analyse_process.start()

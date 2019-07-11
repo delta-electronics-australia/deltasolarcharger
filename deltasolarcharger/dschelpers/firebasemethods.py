@@ -13,6 +13,7 @@ from multiprocessing import Manager
 from queue import Empty
 from collections import deque, OrderedDict
 from threading import Timer, Thread
+import logging
 
 import pyrebase
 import websocket
@@ -80,11 +81,11 @@ class SoftwareUpdateNotifier(Thread):
     def on_error(self, error):
         print(error)
 
-    def on_open(self, message):
-        print(message)
+    def on_open(self):
+        pass
 
-    def on_close(self, message):
-        print(message)
+    def on_close(self):
+        pass
 
     def send(self, data):
         try:
@@ -210,6 +211,8 @@ class FirebaseMethods:
     def __init__(self, firebase_to_analyse_queue, stdin_payload):
         super().__init__()
 
+        self.logger = logging.getLogger()
+
         # Define our stdin variables
         self._ONLINE = stdin_payload['online']
         self._LIMIT_DATA = stdin_payload['LIMIT_DATA']
@@ -334,6 +337,7 @@ class FirebaseMethods:
             self.factory_reset_ws.daemon = True
             self.factory_reset_ws.start()
 
+        self.logger.info('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!!')
         print('WE HAVE FINISHED INIT METHOD OF FIREBASE METHODS!!! ')
 
     def internet_checker(self):
@@ -755,6 +759,7 @@ class FirebaseMethods:
     def refresh_tokens(self):
         """ This method will refresh tokens and recreate listeners """
 
+        self.logger.info('We are refreshing tokens' + str(datetime.now()))
         print('We are refreshing tokens!', datetime.now())
 
         # First close existing listeners
