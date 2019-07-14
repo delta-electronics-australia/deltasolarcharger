@@ -10,10 +10,13 @@ def log_worker_configurer(log_queue):
     root.setLevel(logging.DEBUG)
 
 
-def log(*args, level=logging.INFO):
+def log(*args, level=logging.INFO, print_out=False):
     logger = logging.getLogger()
     final_string = ""
     for item in args:
         final_string += str(item) + ' '
+
+    if print_out:
+        print(args)
 
     logger.log(level, final_string)

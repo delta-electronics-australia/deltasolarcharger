@@ -4,13 +4,14 @@
 import subprocess
 import psutil
 import time
-import threading
 import os
 import shutil
 import sys
 import time
 import requests
 import threading
+import logging
+import logging.handlers
 from ftplib import FTP
 from io import StringIO
 
@@ -22,6 +23,8 @@ import tornado.websocket
 import tornado.ioloop
 from tornado.escape import json_decode
 from json import dumps, loads
+
+from utils import log
 
 # Define our FTP parameters
 _FTP_HOST = "203.32.104.46"
@@ -52,10 +55,10 @@ class ConfigServer(tornado.web.Application):
 
 class ConnectionMethodHandler(tornado.web.RequestHandler):
     def open(self):
-        print('ConnectionMethodHandler open!')
+        log('ConnectionMethodHandler open!', print_out=True)
 
     def on_message(self, message):
-        print('Received a message to change the connection method', message)
+        log('Received a message to change the connection method', message, print_out=True)
 
         decoded_message = loads(message)
         if decoded_message['connection_method_change']:
@@ -65,10 +68,10 @@ class ConnectionMethodHandler(tornado.web.RequestHandler):
 class FactoryResetHandler(tornado.websocket.WebSocketHandler):
 
     def open(self):
-        print('FactoryResetHandler open!')
+        log('FactoryResetHandler open!', print_out=True)
 
     def on_message(self, message):
-        print("Post in factory reset handler!")
+        log("Post in factory reset handler!", print_out=True)
         decoded_message = loads(message)
         self.perform_factory_reset()
 
@@ -87,14 +90,14 @@ class FactoryResetHandler(tornado.websocket.WebSocketHandler):
 class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):
 
     def open(self):
-        print('SoftwareUpdateHandler open!')
+        log('SoftwareUpdateHandler open!', print_out=True)
 
     def on_message(self, message):
-        print('Received a message for software update!', message)
+        log('Received a message for software update!', message, print_out=True)
 
         decoded_message = loads(message)
         if decoded_message['dsc_firmware_update']:
-            print('doing an update now!')
+            log('doing an update now!', print_out=True)
             check_for_updates()
             pass
 
@@ -102,13 +105,13 @@ class SoftwareUpdateHandler(tornado.websocket.WebSocketHandler):
 class InitialSetupHandler(tornado.web.RequestHandler):
 
     def get(self):
-        print('get!')
+        log('get!', print_out=True)
         self.write("hello")
 
     def post(self):
         initial_setup_payload = json_decode(self.request.body)
 
-        print('We got an initial setup message!', initial_setup_payload)
+        log('We got an initial setup message!', initial_setup_payload, print_out=True)
 
         return_message = self.handle_initial_setup(initial_setup_payload)
 
@@ -118,19 +121,19 @@ class InitialSetupHandler(tornado.web.RequestHandler):
 
         # If our return message is True, then that means it was a success
         if return_message is True:
-            print('We have officially completed initial setup. Lets kill proceses now...')
+            log('We have officially completed initial setup. Lets kill proceses now...', print_out=True)
             # Now kill all solar charger processes that are running
             kill_sc_backend()
 
         # If a configuration file already exists, then we need to tell the app that we cannot initialize the DSC
         elif return_message == "config exists":
-            print('Config file already exists, sending a fail')
+            log('Config file already exists, sending a fail', print_out=True)
             pass
 
     def handle_initial_setup(self, initial_setup_payload):
         """ This functions all of the initial setup """
 
-        print('Initial setup payload is:', initial_setup_payload)
+        log('Initial setup payload is:', initial_setup_payload, print_out=True)
 
         # See if a config file already exists
         if os.path.exists('/home/pi/deltasolarcharger/config/config.sqlite'):
@@ -172,8 +175,8 @@ class InitialSetupHandler(tornado.web.RequestHandler):
 class ModifySettingsHandler(tornado.web.RequestHandler):
 
     def post(self):
-        print('post!')
-        print(json_decode(self.request.body))
+        log('post!', print_out=True)
+        log(json_decode(self.request.body), print_out=True)
         response = dumps({'success': True})
         self.write(response)
 
@@ -182,7 +185,7 @@ def configure_ip_tables(selected_interface):
     """ This function sets our IP tables when a 3G connection is detected """
 
     if selected_interface == "3G":
-        print('We have selected the 3G interface!')
+        log('We have selected the 3G interface!', print_out=True)
 
         celluar_network_interfaces = ['ppp0', 'wwan0']
 
@@ -192,7 +195,7 @@ def configure_ip_tables(selected_interface):
             celluar_interface = [interface for interface in celluar_network_interfaces if
                                  interface in network_interfaces]
 
-            print(celluar_interface)
+            log(celluar_interface, print_out=True)
 
             if len(celluar_interface) == 1:
 
@@ -211,7 +214,7 @@ def configure_ip_tables(selected_interface):
                     os.system('sudo iptables -A FORWARD -i wlan0 -o ' + celluar_interface[0] + ' -j ACCEPT')
                     break
                 else:
-                    print("Odd interface...")
+                    log("Odd interface...", print_out=True)
 
             time.sleep(1)
 
@@ -219,7 +222,7 @@ def configure_ip_tables(selected_interface):
         _LIMIT_DATA = True
 
     elif selected_interface == "ethernet":
-        print('We have selected the ethernet interface!')
+        log('We have selected the ethernet interface!', print_out=True)
 
         # First remove all existing rules in IP tables
         for interface in ['eth0', 'eth1']:
@@ -255,14 +258,14 @@ def internet_listener(listening_for):
 
             try:
                 response = requests.get("http://www.google.com")
-                print("response code: " + str(response.status_code))
+                log("response code: " + str(response.status_code), print_out=True)
 
                 online_counter += 1
                 # Test in another 5 seconds
                 time.sleep(5)
 
             except requests.ConnectionError:
-                print("Could not connect, trying again in 5 seconds")
+                log("Could not connect, trying again in 5 seconds", print_out=True)
 
                 # Reset the online counter
                 online_counter = 0
@@ -270,33 +273,33 @@ def internet_listener(listening_for):
                 # Test in another 5 seconds
                 time.sleep(5)
 
-    # If we are looking for the internet to go offline
-    elif listening_for == "offline":
-
-        # Initialise our offline counter
-        offline_counter = 0
-
-        while True:
-            # If 15 minutes has passed, let's restart the hardware
-            if offline_counter == 30:
-                os.system('restart')
-
-            try:
-                response = requests.get("http://www.google.com")
-                print("response code: " + str(response.status_code))
-
-                # Reset the offline counter
-                offline_counter = 0
-
-                # Test in another 5 minutes
-                time.sleep(300)
-
-            except requests.ConnectionError:
-                print("Could not connect, trying again in 30 seconds")
-                offline_counter += 1
-
-                # Test in another 30 seconds
-                time.sleep(30)
+    # # If we are looking for the internet to go offline
+    # elif listening_for == "offline":
+    #
+    #     # Initialise our offline counter
+    #     offline_counter = 0
+    #
+    #     while True:
+    #         # If 15 minutes has passed, let's restart the hardware
+    #         if offline_counter == 30:
+    #             os.system('restart')
+    #
+    #         try:
+    #             response = requests.get("http://www.google.com")
+    #             log("response code: " + str(response.status_code))
+    #
+    #             # Reset the offline counter
+    #             offline_counter = 0
+    #
+    #             # Test in another 5 minutes
+    #             time.sleep(300)
+    #
+    #         except requests.ConnectionError:
+    #             log("Could not connect, trying again in 30 seconds")
+    #             offline_counter += 1
+    #
+    #             # Test in another 30 seconds
+    #             time.sleep(30)
 
 
 def check_internet():
@@ -323,19 +326,19 @@ def check_internet():
     for i in range(60):
         try:
             response = requests.get("http://www.google.com")
-            print("response code: " + str(response.status_code))
+            log("response code: " + str(response.status_code), print_out=True)
             internet_status = True
 
-            # If we are on a 3G connection, we need to detect if we go offline. We should restart the unit if we have
-            # been offline for long enough.
-            if firebase_cred['connectionMethod'] == '3G':
-                internet_listener_thread = threading.Thread(target=internet_listener, args=('offline',))
-                internet_listener_thread.daemon = True
-                internet_listener_thread.start()
-            break
+            # # If we are on a 3G connection, we need to detect if we go offline. We should restart the unit if we have
+            # # been offline for long enough.
+            # if firebase_cred['connectionMethod'] == '3G':
+            #     internet_listener_thread = threading.Thread(target=internet_listener, args=('offline',))
+            #     internet_listener_thread.daemon = True
+            #     internet_listener_thread.start()
+            # break
 
         except requests.ConnectionError:
-            print("Could not connect, trying again 3 seconds...")
+            log("Could not connect, trying again 3 seconds...", print_out=True)
             internet_status = False
             time.sleep(2)
 
@@ -350,7 +353,7 @@ def check_internet():
 
 def restart():
     """ This script restarts the OCPP backend and the solar charger back end """
-    print('Restarting everything...')
+    log('Restarting everything...', print_out=True)
 
     kill_ocpp_backend()
     kill_sc_backend()
@@ -371,7 +374,7 @@ def kill_ocpp_backend():
         # Look for the process with our OCPP backend in it and kill it
         if 'ocppserver.py' in process_command:
             proc.kill()
-            print('Killed OCPP Backend')
+            log('Killed OCPP Backend', print_out=True)
 
 
 def kill_sc_backend():
@@ -386,9 +389,9 @@ def kill_sc_backend():
             for proc in process.children(recursive=True):
                 proc.kill()
             process.kill()
-            print('Killed SC Backend')
+            log('Killed SC Backend', print_out=True)
     except psutil.NoSuchProcess as e:
-        print(e)
+        log(e, print_out=True)
 
 
 def check_latest_version():
@@ -428,7 +431,7 @@ def download_from_ftp():
         ftp.cwd("/deltasolarcharger/deltasolarcharger/dschelpers")
         for file_name in ftp.nlst('*.py'):
             with open('/home/pi/deltasolarcharger/deltasolarcharger/dschelpers/' + file_name, 'wb') as file:
-                print('updated ' + file_name)
+                log('updated ' + file_name, print_out=True)
                 ftp.retrbinary('RETR ' + file_name, file.write)
 
         # Then download the OCPP backend scripts
@@ -449,7 +452,7 @@ def download_from_ftp():
 def check_for_updates():
     """ This function checks for updates and performs an update if necessary """
 
-    print("Performing a software update")
+    log("Performing a software update", print_out=True)
 
     # Get the latest software version
     latest_version = check_latest_version()
@@ -457,10 +460,11 @@ def check_for_updates():
     # Get the current version from our local txt file
     with open('../docs/version.txt', 'r') as f:
         current_version = float(f.read())
-        print('The latest version of the firmware is:', latest_version, 'current version is:', current_version)
+        log('The latest version of the firmware is:', latest_version, 'current version is:', current_version,
+            print_out=True)
 
     if latest_version > current_version:
-        print('Newer version detected. Updating now...')
+        log('Newer version detected. Updating now...', print_out=True)
 
         # If there is a newer version detected, we have to download it from our FTP server
         download_success = download_from_ftp()
@@ -469,7 +473,7 @@ def check_for_updates():
         restart()
 
     else:
-        print('Firmware versions the same, no need to update')
+        log('Firmware versions the same, no need to update', print_out=True)
 
 
 def check_credentials():
@@ -480,11 +484,11 @@ def check_credentials():
 
         # If there is no firebase credentials file then we need to run the initial setup
         if not os.path.exists('../config/config.sqlite'):
-            print('No credentials found, please run initial setup from the app')
+            log('No credentials found, please run initial setup from the app', print_out=True)
             time.sleep(7)
 
         else:
-            print('Firebase credentials found! Exiting the loop.')
+            log('Firebase credentials found! Exiting the loop.', print_out=True)
             credential_stage_passed = True
 
 
@@ -500,12 +504,12 @@ def check_program_integrity():
 
     # First check for deltasolarcharger.py
     if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/deltasolarcharger.py'):
-        print('deltasolarcharger.py exists, moving on to dschelpers')
+        log('deltasolarcharger.py exists, moving on to dschelpers', print_out=True)
 
     # If it doesn't exist then I should download the file from the FTP server
     else:
         if _ONLINE:
-            print('deltasolarcharger not found, downloading from FTP...')
+            log('deltasolarcharger not found, downloading from FTP...', print_out=True)
             download_success = download_from_ftp()
             downloaded_files = True
 
@@ -514,16 +518,16 @@ def check_program_integrity():
 
         # If the file exists, then move on to the next file
         if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/dschelpers/' + file):
-            print(file, 'exists. Checking the next file...')
+            log(file, 'exists. Checking the next file...', print_out=True)
 
         # If the file doesn't exist, we need to download from FTP, break out of the loop and test again
         else:
             if _ONLINE:
-                print(file, 'not found, downloading from FTP...')
+                log(file, 'not found, downloading from FTP...', print_out=True)
                 download_success = download_from_ftp()
                 downloaded_files = True
             else:
-                print('Need an internet connection, restarting')
+                log('Need an internet connection, restarting', print_out=True)
                 # This function simply restarts startv2.py
                 os.execv(sys.executable, ['python3'] + sys.argv)
 
@@ -532,17 +536,17 @@ def check_program_integrity():
 
         # If the file exists, then move on to the next file
         if os.path.exists('/home/pi/deltasolarcharger/deltasolarcharger/ocppserver/' + file):
-            print(file, 'exists. Checking the next file...')
+            log(file, 'exists. Checking the next file...', print_out=True)
 
         # If the file doesn't exist, we need to download from FTP
         else:
-            print(file, 'not found, downloading from FTP...')
+            log(file, 'not found, downloading from FTP...', print_out=True)
             download_success = download_from_ftp()
             downloaded_files = True
 
     # If we have downloaded files, then we should kill everything and restart from scratch
     if downloaded_files:
-        print('Restarting the program!')
+        log('Restarting the program!', print_out=True)
         restart()
 
 
@@ -553,8 +557,21 @@ def start_config_server():
     config_server.run()
 
 
+def configure_logger():
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarchargerlauncher.log", when='midnight',
+                                                  backupCount=7)
+    f = logging.Formatter('%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s')
+    h.setFormatter(f)
+    logger.addHandler(h)
+
+    return logger
+
+
 if __name__ == '__main__':
-    print('Welcome to the Delta Solar Charger Backend!')
+    logger = configure_logger()
+    log('Welcome to the Delta Solar Charger Backend!', print_out=True)
 
     # Initialize our process
     solar_charger_process = None
@@ -577,18 +594,18 @@ if __name__ == '__main__':
 
     # First check if the files we need are here
     check_program_integrity()
-    print('Initial stage passed')
+    log('Initial stage passed', print_out=True)
 
     ''' This script starts main.py and ensures that if there are any crashes that the file restarts itself '''
     while True:
         check_for_updates()
 
-        print("\nStarting Delta Solar Charger Backend")
+        log("\nStarting Delta Solar Charger Backend", print_out=True)
         solar_charger_process = subprocess.Popen("sudo python3 deltasolarcharger.py", shell=True, stdin=subprocess.PIPE)
 
         # Once we start our main program, we then send whether or not we're online, in CSIRO mode or if we limit data
         solar_charger_process.communicate(
             input=bytes(dumps({'online': _ONLINE, 'LIMIT_DATA': _LIMIT_DATA}), 'UTF-8'))
 
-        print('Waiting for Python to exit')
+        log('Waiting for Python to exit', print_out=True)
         solar_charger_process.wait()
