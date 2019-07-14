@@ -340,11 +340,11 @@ class LogListenerProcess(Process):
                 record = self.log_queue.get()
                 if record is None:  # We send this as a sentinel to tell the listener to quit.
                     break
-                log(record.levelname, record.msg)
+                print(record.levelname, record.msg)
                 logger = logging.getLogger(record.name)
                 logger.handle(record)
             except Exception:
-                log('Whoops! Problem:', file=sys.stderr)
+                print('Whoops! Problem:', file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
 
