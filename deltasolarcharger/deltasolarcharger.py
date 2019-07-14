@@ -17,7 +17,7 @@ import random
 from requests.exceptions import HTTPError, SSLError, ConnectionError
 from requests.packages.urllib3.exceptions import NewConnectionError, MaxRetryError
 
-from utils import log_worker_configurer
+from utils import log_worker_configurer, log
 
 # Add dschelpers into our path
 import sys
@@ -56,10 +56,10 @@ class ModbusCommunications(ModbusMethods):
         self._webanalytics_event = kwargs['webanalytics_event']
 
     def stop(self):
-        print('tried to stop modbus')
+        log('tried to stop modbus')
         self._stop_event.set()
         self._webanalytics_event.set()
-        print('Modbus stop signal set')
+        log('Modbus stop signal set')
 
     def stopped(self):
         return self._stop_event.is_set()
@@ -68,11 +68,11 @@ class ModbusCommunications(ModbusMethods):
         error_counter = 0
         while True:
             start = time.time()
-            # print('start of a new cycle!', datetime.now())
+            # log('start of a new cycle!', datetime.now())
 
             # Check if a flag has been raised to stop the process
             if self.stopped():
-                print('Modbus broken')
+                log('Modbus broken')
                 break
 
             try:
@@ -103,8 +103,8 @@ class ModbusCommunications(ModbusMethods):
                     self.stop()
                     break
 
-                print("IO Error!")
-                print(error)
+                log("IO Error!")
+                log(error)
                 self.initiate_parameters(1, 5)
 
             except ValueError as error:
@@ -113,8 +113,8 @@ class ModbusCommunications(ModbusMethods):
                     self.stop()
                     break
 
-                print("Value Error!")
-                print(error)
+                log("Value Error!")
+                log(error)
                 self.initiate_parameters(1, 5)
 
     def run(self):
@@ -143,10 +143,10 @@ class FirebaseCommunications(FirebaseMethods, Process):
         # self.firebase = FirebaseMethods(kwargs['stop_event'], kwargs["firebase_to_analyse_queue"])
 
     def stop(self):
-        print('tried to stop firebase')
+        log('tried to stop firebase')
         self.ocpp_ws.stop()
 
-        print('Firebase broken')
+        log('Firebase broken')
         self._stop_event.set()
         self._webanalytics_event.set()
 
@@ -158,7 +158,7 @@ class FirebaseCommunications(FirebaseMethods, Process):
         while True:
             # Check if a stop event has been raised and then break out
             if self.stopped():
-                print('Firebase broken')
+                log('Firebase broken')
                 # Close our OCPP Websocket Client
                 self.ocpp_ws.stop()
                 break
@@ -186,28 +186,28 @@ class FirebaseCommunications(FirebaseMethods, Process):
                     self.update_external_sources(['analytics_data', analytics_data])
 
             except HTTPError as e:
-                print('got a http error, laters', e, datetime.now())
+                log('got a http error, laters', e, datetime.now())
                 self.stop()
                 break
             except SSLError as e:
-                print('got an ssl error, laters', e, datetime.now())
+                log('got an ssl error, laters', e, datetime.now())
                 self.stop()
                 break
             except ConnectionResetError as e:
-                print('got a connection reset error, laters', e, datetime.now())
+                log('got a connection reset error, laters', e, datetime.now())
                 self.stop()
                 break
             except ConnectionError as e:
-                print('got a connection error, laters', e, datetime.now())
+                log('got a connection error, laters', e, datetime.now())
                 self.stop()
             except NewConnectionError as e:
-                print('got a new connection error, laters', e, datetime.now())
+                log('got a new connection error, laters', e, datetime.now())
                 self.stop()
             except MaxRetryError as e:
-                print('got a max retry error, laters', e, datetime.now())
+                log('got a max retry error, laters', e, datetime.now())
                 self.stop()
             except OSError as e:
-                print('got a OS Error, laters', e, datetime.now())
+                log('got a OS Error, laters', e, datetime.now())
                 self.stop()
 
 
@@ -226,10 +226,10 @@ class Analyse(Process):
         self._stop_event = kwargs['stop_event']
 
     def stop(self):
-        print('tried to stop analyse')
+        log('tried to stop analyse')
         self._stop_event.set()
         self._webanalytics_event.set()
-        print('analyse stop signal sent')
+        log('analyse stop signal sent')
 
     def stopped(self):
         return self._stop_event.is_set()
@@ -237,7 +237,7 @@ class Analyse(Process):
     def run(self):
         while True:
             if self.stopped():
-                print('Analyse broken')
+                log('Analyse broken')
                 break
 
             # When we see that the queue has been populated with something then we take action
@@ -286,16 +286,16 @@ class WebAnalytics(WebAnalyticsMethods, Process):
         log_worker_configurer(self.log_queue)
 
         while True:
-            # print('Webanalytics at the start of loop', self.stopped())
+            # log('Webanalytics at the start of loop', self.stopped())
             if self.stopped():
-                print('Webanalytics broken')
+                log('Webanalytics broken')
                 break
             # Wait for new data to come
             self._webanalytics_event.wait()
             # Check if a stop event has been raised and then break out
-            # print('Webanalytics after webanalytics event', self.stopped())
+            # log('Webanalytics after webanalytics event', self.stopped())
             if self.stopped():
-                print('Webanalytics broken')
+                log('Webanalytics broken')
                 break
 
             while not self.modbus_to_webanalytics_queue.empty():
@@ -309,7 +309,7 @@ class WebAnalytics(WebAnalyticsMethods, Process):
                     self.webanalytics_to_firebase_queue.put(self.current_analytics_data)
 
                 if self.stopped():
-                    print('Webanalytics broken')
+                    log('Webanalytics broken')
                     break
 
             # Clear the event and wait for the next event to be signalled
@@ -340,11 +340,11 @@ class LogListenerProcess(Process):
                 record = self.log_queue.get()
                 if record is None:  # We send this as a sentinel to tell the listener to quit.
                     break
-                print(record.levelname, record.msg)
+                log(record.levelname, record.msg)
                 logger = logging.getLogger(record.name)
                 logger.handle(record)
             except Exception:
-                print('Whoops! Problem:', file=sys.stderr)
+                log('Whoops! Problem:', file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
 
@@ -362,7 +362,7 @@ def main():
     with open('../docs/version.txt', 'r') as f:
         current_version = float(f.read())
         logger.log(logging.INFO, 'Running software version:' + str(current_version))
-        print('Running software version:', current_version)
+        log('Running software version:', current_version)
 
     # Read from stdin and get the data that has been sent from start.py
     stdin_payload = loads(stdin.read())
@@ -413,7 +413,7 @@ def main():
     analyse_process = Analyse(**queue_kwargs)
 
     logger.log(logging.INFO, 'Initialization of processes is done. Starting all processes...')
-    print('Initialization of processes is done. Starting all processes...')
+    log('Initialization of processes is done. Starting all processes...')
 
     webanalytics_process.start()
     firebasecommunications_process.start()
@@ -423,94 +423,94 @@ def main():
     # Wait for the processes to end if a stop event is raised
     #################
     webanalytics_process.join()
-    print('Web Analytics joined', threading.enumerate(), datetime.now())
+    log('Web Analytics joined', threading.enumerate(), datetime.now())
     #################
 
     try:
-        print('Closing charging modes listener from main')
+        log('Closing charging modes listener from main')
         firebasecommunications_process.charging_modes_listener.close()
         firebasecommunications_process.charging_modes_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing buffer agro listener from main')
+        log('Closing buffer agro listener from main')
         firebasecommunications_process.buffer_aggressiveness_listener.close()
         firebasecommunications_process.buffer_aggressiveness_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing update firmware listener from main')
+        log('Closing update firmware listener from main')
         firebasecommunications_process.update_firmware_listener.close()
         firebasecommunications_process.update_firmware_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing dsc firmware update listener from main')
+        log('Closing dsc firmware update listener from main')
         firebasecommunications_process.dsc_firmware_update_listener.close()
         firebasecommunications_process.dsc_firmware_update_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing delete charger listener from main')
+        log('Closing delete charger listener from main')
         firebasecommunications_process.delete_charger_listener.close()
         firebasecommunications_process.delete_charger_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing factory reset listener from main')
+        log('Closing factory reset listener from main')
         firebasecommunications_process.factory_reset_listener.close()
         firebasecommunications_process.factory_reset_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing manual charge control listener from main')
+        log('Closing manual charge control listener from main')
         firebasecommunications_process.manual_charge_control_listener.close()
         firebasecommunications_process.manual_charge_control_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
     try:
-        print('Closing misc listener listener from main')
+        log('Closing misc listener listener from main')
         firebasecommunications_process.misc_listener.close()
         firebasecommunications_process.misc_listener = None
     except AttributeError as e:
-        print(e)
+        log(e)
 
-    print(firebasecommunications_process.refresh_timer, datetime.now())
+    log(firebasecommunications_process.refresh_timer, datetime.now())
     firebasecommunications_process.refresh_timer.cancel()
-    print('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
+    log('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
 
-    print(firebasecommunications_process.exitcode)
+    log(firebasecommunications_process.exitcode)
     # If the process is None then it has not been terminated
     if not firebasecommunications_process.exitcode:
         firebasecommunications_process.terminate()
 
     #################
     firebasecommunications_process.join()
-    print('Firebase joined', threading.enumerate(), datetime.now())
+    log('Firebase joined', threading.enumerate(), datetime.now())
     #################
 
-    print(firebasecommunications_process.refresh_timer, datetime.now())
+    log(firebasecommunications_process.refresh_timer, datetime.now())
     firebasecommunications_process.refresh_timer.cancel()
-    print('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
+    log('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
 
-    print(analyse_process.exitcode)
+    log(analyse_process.exitcode)
     # If the process is None then it has not been terminated
     if not analyse_process.exitcode:
         analyse_process.terminate()
 
     #################
     analyse_process.join()
-    print('Analyse joined', threading.enumerate(), datetime.now())
+    log('Analyse joined', threading.enumerate(), datetime.now())
     #################
 
-    print(firebasecommunications_process.refresh_timer, datetime.now())
+    log(firebasecommunications_process.refresh_timer, datetime.now())
     firebasecommunications_process.refresh_timer.cancel()
-    print('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
+    log('refresh timer cancelled', firebasecommunications_process.refresh_timer, datetime.now())
 
     # Check what other threads are still running
-    print(threading.enumerate())
+    log(threading.enumerate())
 
-    print('We are out of the program')
+    log('We are out of the program')
     _log_queue.put_nowait(None)
     log_listener_process.join()
 

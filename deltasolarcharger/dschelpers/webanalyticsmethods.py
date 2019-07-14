@@ -3,6 +3,8 @@ import pyrebase
 import ast
 import csv
 from datetime import datetime
+from utils import log
+
 
 class WebAnalyticsMethods:
 
@@ -28,7 +30,7 @@ class WebAnalyticsMethods:
 
             with open('../data/logs/' + current_csv) as csvfile:
                 if '\0' in csvfile.read():
-                    print('We found a null byte, lets fix it')
+                    log('We found a null byte, lets fix it')
 
                     # Reset our csv iterator
                     csvfile.seek(0)
@@ -52,16 +54,16 @@ class WebAnalyticsMethods:
                         if len(row) != 0:
                             writer.writerow(row)
 
-                print('Fixed the csv file!!')
+                log('Fixed the csv file!!')
 
         except FileNotFoundError as e:
-            print('File doesnt exist! Skipping integrity check')
+            log('File doesnt exist! Skipping integrity check')
 
     def sync_analytics_data(self):
         self.analyse_todays_history()
 
     def analyse_todays_history(self):
-        print('Analysing todays past data...')
+        log('Analysing todays past data...')
 
         try:
             current_csv = datetime.now().strftime('%Y-%m-%d') + '.csv'
@@ -94,11 +96,11 @@ class WebAnalyticsMethods:
                         btp_consumed_total += (btp * (2 / 3600)) / 1000
                     else:
                         btp_charged_total += (btp * (2 / 3600)) / 1000
-                print('Done!')
-                print('DC Power: ', dcp_total)
-                print('Utility export/import: ', utility_p_export_total, utility_p_import_total)
-                print('Battery Consumed/Charged: ', btp_consumed_total, btp_charged_total)
-                print('AC2 Power: ', ac2p_total)
+                log('Done!')
+                log('DC Power: ', dcp_total)
+                log('Utility export/import: ', utility_p_export_total, utility_p_import_total)
+                log('Battery Consumed/Charged: ', btp_consumed_total, btp_charged_total)
+                log('AC2 Power: ', ac2p_total)
 
             # Final synchronised data:
             self.current_analytics_data = {'dcp_t': dcp_total,
@@ -109,7 +111,7 @@ class WebAnalyticsMethods:
                                            'ac2p_t': ac2p_total}
 
         except FileNotFoundError as e:
-            print(e, 'creating blank analytics object')
+            log(e, 'creating blank analytics object')
             # Final synchronised data:
             self.current_analytics_data = {'dcp_t': 0,
                                            'utility_p_export_t': 0,
@@ -122,7 +124,7 @@ class WebAnalyticsMethods:
         day = datetime.now().day
         # Check if we have gone to a new day, if we have then we have to reset the current_analytics dict
         if day != self.today:
-            print('New day - reset analytics!')
+            log('New day - reset analytics!')
             self.current_analytics_data = {'dcp_t': 0,
                                            'utility_p_export_t': 0,
                                            'utility_p_import_t': 0,

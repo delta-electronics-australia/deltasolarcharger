@@ -7,6 +7,8 @@ from datetime import datetime
 
 from queue import Queue
 
+from utils import log
+
 
 class ModbusMethods:
     def __init__(self, analyse_to_modbus_queue):
@@ -40,7 +42,7 @@ class ModbusMethods:
         # self.DPM.mode = minimalmodbus.MODE_RTU
         # self.DPM.handle_local_echo = False
 
-        print('Modbus initialized!')
+        log('Modbus initialized!')
 
     @staticmethod
     def twos_comp(vals, bits):
@@ -126,13 +128,13 @@ class ModbusMethods:
             if purpose == "inverter_op_mode":
                 if new_payload['inverter_op_mode'] == "CHARGE_FIRST_MODE":
                     self.E5.write_register(25626, 4, 0, 6, False)
-                    print('Changed mode to Charge First Mode!')
+                    log('Changed mode to Charge First Mode!')
                 elif new_payload['inverter_op_mode'] == "SELF_CONSUMPTION_MODE_INTERNAL":
                     self.E5.write_register(25626, 1, 0, 6, False)
-                    print('Changed mode to Self Consumption Mode!')
+                    log('Changed mode to Self Consumption Mode!')
                 elif new_payload['inverter_op_mode'] == "WITHOUTBTMODE":
                     self.E5.write_register(25626, 6, 0, 6, False)
-                    print('Changed mode to Without BT Mode!')
+                    log('Changed mode to Without BT Mode!')
 
         # Grab all inverter_cont_data
         inverter_data = dict()
@@ -144,7 +146,7 @@ class ModbusMethods:
         # Todo: AC1 Power needs to be twos compliment - CHECK THIS
         # Read the relevant registers, store in "temp"
         temp = self.E5.read_registers(1056, 4, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data["ac1_voltage"] = float(temp[0])
         inverter_data['ac1_current'] = float(temp[1])
         inverter_data['ac1_power'] = float(temp[2])
@@ -153,7 +155,7 @@ class ModbusMethods:
         # Same as above
         self.E5.write_register(799, 32, 0, 6, False)
         temp = self.E5.read_registers(1056, 4, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data["ac2_voltage"] = float(temp[0])
         inverter_data['ac2_current'] = float(temp[1])
         inverter_data['ac2_power'] = float(temp[2])
@@ -161,50 +163,50 @@ class ModbusMethods:
 
         self.E5.write_register(799, 48, 0, 6, False)
         temp = self.E5.read_registers(1056, 4, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data['dc1_voltage'] = float(temp[0])
         inverter_data['dc1_current'] = float(temp[1])
         inverter_data['dc1_power'] = float(temp[2])
 
         self.E5.write_register(799, 49, 0, 6, False)
         temp = self.E5.read_registers(1056, 4, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data['dc2_voltage'] = float(temp[0])
         inverter_data['dc2_current'] = float(temp[1])
         inverter_data['dc2_power'] = float(temp[2])
 
         temp = self.E5.read_registers(1079, 4, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data['ambient_temp'] = str(temp[0])
         inverter_data['boost_1_temp'] = str(temp[1])
         inverter_data['boost_2_temp'] = str(temp[2])
         inverter_data['inverter_temp'] = str(temp[3])
 
         temp = self.E5.read_registers(1551, 1, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         operation_mode = self.lookup_operation_mode(temp)
 
         inverter_data['inverter_op_mode'] = operation_mode
 
         temp = self.E5.read_registers(1047, 1, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         inverter_data['inverter_status'] = self.lookup_inverter_status(temp[0])
 
         # temp = self.E5.read_registers(1047, 1, 4)
         # inverter_data['inverter_status'] = temp
         #
         temp = self.E5.read_registers(1039, 1, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         dsp = hex(int(temp[0]))
         inverter_data['fw_dsp'] = 'v0' + str(int(dsp[2], 16)) + '.' + str(int(dsp[3:5], 16))
 
         temp = self.E5.read_registers(1041, 1, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         red = hex(int(temp[0]))
         inverter_data['fw_red'] = 'v0' + str(int(red[2], 16)) + '.' + str(int(red[3:5], 16))
 
         temp = self.E5.read_registers(1043, 1, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         comm = hex(int(temp[0]))
         inverter_data['fw_disp'] = 'v0' + str(int(comm[2], 16)) + '.' + str(int(comm[3:5], 16))
 
@@ -216,7 +218,7 @@ class ModbusMethods:
         start = 1536
         num = 32
         modbus_int_out = self.E5.read_registers(start - 1, num, 4)
-        _debug and print(modbus_int_out)
+        _debug and log(modbus_int_out)
 
         for x in range(0, num):
             bt_data_temp[start + x] = (modbus_int_out[x])
@@ -238,7 +240,7 @@ class ModbusMethods:
         bt_data['bt_op_mode'] = self.bt_mode_database(bt_data_temp[1552])
 
         temp = self.E5.read_registers(1607, 2, 4)
-        _debug and print(temp)
+        _debug and log(temp)
         bt_data['bt_module1_temp_min'] = float(temp[1])
         bt_data['bt_module1_temp_max'] = float(temp[0])
         # Grab all dpm_cont_data
@@ -259,13 +261,13 @@ if __name__ == '__main__':
     while True:
         try:
             payload = modbus_methods.get_modbus_data(_debug=True)
-            print('BT SOC is: ', payload[1]['bt_soc'])
-            print(payload[0]['dc1_power'])
+            log('BT SOC is: ', payload[1]['bt_soc'])
+            log(payload[0]['dc1_power'])
 
             time.sleep(1)
         except OSError as e:
-            print(e)
+            log(e)
             modbus_methods = ModbusMethods(Queue())
         except ValueError as e:
-            print(e)
+            log(e)
             modbus_methods = ModbusMethods(Queue())

@@ -10,6 +10,8 @@ from statistics import mean
 from collections import deque
 from datetime import datetime
 
+from utils import log
+
 
 class AnalyseMethods:
     def __init__(self, firebase_to_analyse_queue, analyze_to_modbus_queue):
@@ -107,7 +109,7 @@ class AnalyseMethods:
         #              'available_current', 'weighted avg buffered', 'sd', 'coeff var', 'buffer', 'selected charge rate',
         #              'floored charge rate'])
 
-        print('Analyze initialized!')
+        log('Analyze initialized!')
 
     @staticmethod
     def condition_data(data):
@@ -253,7 +255,7 @@ class AnalyseMethods:
         # ******************************** FIRST TRACK OUR SOLAR ***********************************************
         # ******************************************************************************************************
 
-        # print('Our current window is: ', list(self.pv_window))
+        # log('Our current window is: ', list(self.pv_window))
 
         # Take the weighted average of the current window
         pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
@@ -262,26 +264,26 @@ class AnalyseMethods:
         if data['inverter_status'] == "Stand Alone":
             pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
-        print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+        log('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
         # Define our thresholds
         upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
         lower_threshold = self._CURRENT_CHARGE_RATE * (1 - self.LOWER_THRESHOLD)
 
-        # print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
+        # log('Our threshold is ', lower_threshold, ' to ', upper_threshold)
 
         # Check if our window mean is greater than the upper threshold
         if pv_window_mean > upper_threshold:
             # Increase the charge rate if window mean is greater.
             self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_INCREASE
-            # print('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
+            # log('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
 
         elif pv_window_mean < lower_threshold:
             self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_DECREASE
-            # print('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
+            # log('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
 
         else:
-            # print('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
+            # log('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
             pass
 
         # # Log all the data
@@ -293,12 +295,12 @@ class AnalyseMethods:
 
         # If we are not throttled and the temperatures go over the limit, then we turn throttle on
         if not self._TEMP_THROTTLED and data['bt_module1_temp_max'] > self._BATTERY_TEMP_LIMIT:
-            print('We have reached', data['bt_module1_temp_max'], 'time to throttle')
+            log('We have reached', data['bt_module1_temp_max'], 'time to throttle')
             self._TEMP_THROTTLED = True
 
         # If we are throttled and the temperatures go under the cooled off temperature, we turn throttle off
         elif self._TEMP_THROTTLED and data['bt_module1_temp_max'] < self._BATTERY_COOLED_OFF_TEMP:
-            print('We have reached', data['bt_module1_temp_max'], 'time to stop throttling')
+            log('We have reached', data['bt_module1_temp_max'], 'time to stop throttling')
             self._TEMP_THROTTLED = False
 
         # ******************************************************************************************************
@@ -306,8 +308,8 @@ class AnalyseMethods:
         # ******************************************************************************************************
 
         if self._TEMP_THROTTLED:
-            print('Current charge rate is', self._CURRENT_CHARGE_RATE)
-            print('We have reached a high battery temperature, time to throttle')
+            log('Current charge rate is', self._CURRENT_CHARGE_RATE)
+            log('We have reached a high battery temperature, time to throttle')
             self._THROTTLE_ADJUSTED_CHARGE_RATE = floor(
                 self._CURRENT_CHARGE_RATE + self._THROTTLED_BATTERY_CURRENT)
 
@@ -321,12 +323,12 @@ class AnalyseMethods:
 
         # If we are not BT SOC throttled and we go below the BTSOC lower limit, then we need to throttle
         if not self._BTSOC_THROTTLED and data['btsoc'] < self._BTSOC_LOWER_LIMIT:
-            print('We have reached', data['btsoc'], 'SOC, time to throttle')
+            log('We have reached', data['btsoc'], 'SOC, time to throttle')
             self._BTSOC_THROTTLED = True
 
         # If we are BT SOC throttled and we go above the BTSOC lower limit, then we can disable throttling
         elif self._BTSOC_THROTTLED and data['btsoc'] > self._BTSOC_UPPER_LIMIT:
-            print('We have reached', data['btsoc'], 'SOC, time to stop throttling')
+            log('We have reached', data['btsoc'], 'SOC, time to stop throttling')
             self._BTSOC_THROTTLED = False
 
         # ******************************************************************************************************
@@ -421,14 +423,14 @@ class AnalyseMethods:
         # Now define all of our algorithm variables for this new set of data
         self.update_algorithm_variables(inverter_status)
 
-        # print('ac2p is: ', data['ac2p'])
-        # print('Our current charger list is', self.charger_list)
-        # print('We have available solar current of ', approx_dc_current)
-        # print('Our charging mode is: ', self._CHARGING_MODE)
-        # print('Our battery module 1 temperature is:', data['bt_module1_temp_max'])
-        # print('Our battery SOC is', data['btsoc'])
-        # print('Inverter operation mode is', inverter_op_mode)
-        # print('Inverters status is', inverter_status)
+        # log('ac2p is: ', data['ac2p'])
+        # log('Our current charger list is', self.charger_list)
+        # log('We have available solar current of ', approx_dc_current)
+        # log('Our charging mode is: ', self._CHARGING_MODE)
+        # log('Our battery module 1 temperature is:', data['bt_module1_temp_max'])
+        # log('Our battery SOC is', data['btsoc'])
+        # log('Inverter operation mode is', inverter_op_mode)
+        # log('Inverters status is', inverter_status)
 
         # If we have more than one active charger
         if num_active_chargers > 1:
@@ -504,26 +506,26 @@ class AnalyseMethods:
                 if inverter_status == "Stand Alone":
                     pv_window_mean = pv_window_mean * (1 - self._BUFFER)
 
-                # print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+                # log('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
                 # Define our thresholds
                 upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
                 lower_threshold = self._CURRENT_CHARGE_RATE * (1 - self.LOWER_THRESHOLD)
 
-                # print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
+                # log('Our threshold is ', lower_threshold, ' to ', upper_threshold)
 
                 # Check if our window mean is greater than the upper threshold
                 if pv_window_mean > upper_threshold:
                     # Increase the charge rate if window mean is greater.
                     self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_INCREASE
-                    # print('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
+                    # log('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
 
                 elif pv_window_mean < lower_threshold:
                     self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_DECREASE
-                    # print('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
+                    # log('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
 
                 else:
-                    # print('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
+                    # log('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
                     pass
 
                 # # Log all the data
@@ -535,12 +537,12 @@ class AnalyseMethods:
 
                 # If we are not throttled and the temperatures go over the limit, then we turn throttle on
                 if not self._TEMP_THROTTLED and data['bt_module1_temp_max'] > self._BATTERY_TEMP_LIMIT:
-                    print('We have reached', data['bt_module1_temp_max'], 'time to throttle')
+                    log('We have reached', data['bt_module1_temp_max'], 'time to throttle')
                     self._TEMP_THROTTLED = True
 
                 # If we are throttled and the temperatures go under the cooled off temperature, we turn throttle off
                 elif self._TEMP_THROTTLED and data['bt_module1_temp_max'] < self._BATTERY_COOLED_OFF_TEMP:
-                    print('We have reached', data['bt_module1_temp_max'], 'time to stop throttling')
+                    log('We have reached', data['bt_module1_temp_max'], 'time to stop throttling')
                     self._TEMP_THROTTLED = False
 
                 # ******************************************************************************************************
@@ -548,8 +550,8 @@ class AnalyseMethods:
                 # ******************************************************************************************************
 
                 if self._TEMP_THROTTLED:
-                    print('Current charge rate is', self._CURRENT_CHARGE_RATE)
-                    print('We have reached a high battery temperature, time to throttle')
+                    log('Current charge rate is', self._CURRENT_CHARGE_RATE)
+                    log('We have reached a high battery temperature, time to throttle')
                     self._THROTTLE_ADJUSTED_CHARGE_RATE = floor(
                         self._CURRENT_CHARGE_RATE + self._THROTTLED_BATTERY_CURRENT)
 
@@ -563,12 +565,12 @@ class AnalyseMethods:
 
                 # If we are not BT SOC throttled and we go below the BTSOC lower limit, then we need to throttle
                 if not self._BTSOC_THROTTLED and data['btsoc'] < self._BTSOC_LOWER_LIMIT:
-                    print('We have reached', data['btsoc'], 'SOC, time to throttle')
+                    log('We have reached', data['btsoc'], 'SOC, time to throttle')
                     self._BTSOC_THROTTLED = True
 
                 # If we are BT SOC throttled and we go above the BTSOC lower limit, then we can disable throttling
                 elif self._BTSOC_THROTTLED and data['btsoc'] > self._BTSOC_UPPER_LIMIT:
-                    print('We have reached', data['btsoc'], 'SOC, time to stop throttling')
+                    log('We have reached', data['btsoc'], 'SOC, time to stop throttling')
                     self._BTSOC_THROTTLED = False
 
                 # ******************************************************************************************************
@@ -581,7 +583,7 @@ class AnalyseMethods:
 
                     # If we are in stand alone mode and we are battery throttled, we need to stop charging ASAP
                     if self._BTSOC_THROTTLED:
-                        print('BT SOC is:', data['btsoc'],
+                        log('BT SOC is:', data['btsoc'],
                               ', we are throttled and we are in standalone mode, time to stop charging')
                         self._THROTTLE_ADJUSTED_CHARGE_RATE = 'stop'
 
@@ -594,7 +596,7 @@ class AnalyseMethods:
                             # Make sure we are in charge first mode
                             self.check_and_change_inverter_op_mode(inverter_op_mode, 'CHARGE_FIRST_MODE')
 
-                            print('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
+                            log('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
                                   'and we are in grid connected mode', 'limiting to 6A')
                             self._THROTTLE_ADJUSTED_CHARGE_RATE = 6
 
@@ -603,7 +605,7 @@ class AnalyseMethods:
                             self.check_and_change_inverter_op_mode(inverter_op_mode,
                                                                    'SELF_CONSUMPTION_MODE_INTERNAL')
 
-                            print('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
+                            log('BT SOC is:', data['btsoc'], 'current charge rate is', self._CURRENT_CHARGE_RATE,
                                   'and we are in grid connected mode', 'going for solar charging only')
                             self._THROTTLE_ADJUSTED_CHARGE_RATE = floor(self._THROTTLE_ADJUSTED_CHARGE_RATE)
 
@@ -637,7 +639,7 @@ class AnalyseMethods:
                     # ******************************** FIRST TRACK OUR SOLAR *******************************************
                     # **************************************************************************************************
 
-                    # print('Our current window is: ', list(self.pv_window))
+                    # log('Our current window is: ', list(self.pv_window))
 
                     # Take the weighted average of the current window
                     pv_window_mean = self.take_weighted_average(self.pv_window, self._WINDOWSIZE, damping_factor=0.6)
@@ -649,29 +651,29 @@ class AnalyseMethods:
                     upper_threshold = self._CURRENT_CHARGE_RATE * (1 + self.UPPER_THRESHOLD)
                     lower_threshold = self._CURRENT_CHARGE_RATE * (1 - self.LOWER_THRESHOLD)
 
-                    print('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
+                    log('We are using', pv_window_mean, 'that includes a buffer of ', self._BUFFER)
 
-                    print('Our current charge rate is', self._CURRENT_CHARGE_RATE)
-                    print('Our threshold is ', lower_threshold, ' to ', upper_threshold)
+                    log('Our current charge rate is', self._CURRENT_CHARGE_RATE)
+                    log('Our threshold is ', lower_threshold, ' to ', upper_threshold)
 
                     # Check if our window mean is greater than the upper threshold
                     if pv_window_mean > upper_threshold:
                         # Increase the charge rate if window mean is greater.
                         self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_INCREASE
-                        # print('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
+                        # log('Our mean is', pv_window_mean, "therefore we increase rate to", self._CURRENT_CHARGE_RATE)
 
                     elif pv_window_mean < lower_threshold:
                         self._CURRENT_CHARGE_RATE = self._CURRENT_CHARGE_RATE * self._CHARGE_RATE_DECREASE
-                        # print('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
+                        # log('Our mean is', pv_window_mean, "therefore we decrease rate to", self._CURRENT_CHARGE_RATE)
 
                     else:
-                        # print('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
+                        # log('We are within the threshold! No change needed. Charge rate is ', self._CURRENT_CHARGE_RATE)
                         pass
 
                     # # Log all the data
                     # self.log_data(data, approx_dc_current, pv_window_mean, z_stats)
 
-                    # print('Now we floor it:', floor(self._CURRENT_CHARGE_RATE))
+                    # log('Now we floor it:', floor(self._CURRENT_CHARGE_RATE))
 
                 else:
                     # We are below 1A of DC power, so just let the current charge rate be 1A
@@ -690,7 +692,7 @@ class AnalyseMethods:
                         if data['btsoc'] > self._DRAIN_MODE_LOWER_LIMIT:
                             # ... then we need to drain the battery
 
-                            print('We are in standalone mode and drain mode, charge at max standalone current')
+                            log('We are in standalone mode and drain mode, charge at max standalone current')
                             # self._CURRENT_CHARGE_RATE = floor(self._BATTERY_CHARGE_RATE + self._CURRENT_CHARGE_RATE)
                             # floor(self._BATTERY_CHARGE_RATE + self._CURRENT_CHARGE_RATE)
                             # if self._CURRENT_CHARGE_RATE > self._MAX_STANDALONE_CURRENT:
@@ -704,7 +706,7 @@ class AnalyseMethods:
 
                         # If in drain mode and BT SOC is below SOC lower limit, we can deactivate drain mode
                         else:
-                            print('We are no longer above 88% SOC - deactivate drain mode')
+                            log('We are no longer above 88% SOC - deactivate drain mode')
                             self._DRAIN_MODE_ACTIVATED = False
                             final_charge_rate = floor(self._CURRENT_CHARGE_RATE)
 
@@ -712,7 +714,7 @@ class AnalyseMethods:
                     else:
                         # ...then we check if our BT SOC is above a certain level
                         if data['btsoc'] > self._DRAIN_MODE_UPPER_LIMIT:
-                            print('Our BT SOC has gone above', self._DRAIN_MODE_UPPER_LIMIT, 'activate drain mode')
+                            log('Our BT SOC has gone above', self._DRAIN_MODE_UPPER_LIMIT, 'activate drain mode')
                             # Then we need to activate drain mode
                             self._DRAIN_MODE_ACTIVATED = True
                             final_charge_rate = floor(self._CURRENT_CHARGE_RATE)
@@ -835,7 +837,7 @@ class AnalyseMethods:
 
         # If we haven't reached the window size, we must skip this second
         if len(self.pv_window) != self._WINDOWSIZE:
-            # print('We havent reached the required window size yet!')
+            # log('We havent reached the required window size yet!')
             pass
         else:
             self._CALIBRATE_DONE = True
@@ -882,13 +884,13 @@ class AnalyseMethods:
                 # Define the decline in charging rate
                 self._CHARGE_RATE_DECREASE = 0.80
 
-        # print('Algorithm variables coming:')
-        # print('Inverter Status:', inverter_status)
-        # print('Buffer Aggressiveness:', self._BUFFER_AGGRESSIVENESS)
-        # print('Upper Threshold:', self.UPPER_THRESHOLD)
-        # print('Lower Threshold:', self.LOWER_THRESHOLD)
-        # print('Charge Rate Increase', self._CHARGE_RATE_INCREASE)
-        # print('Charge Rate Decrease', self._CHARGE_RATE_DECREASE)
+        # log('Algorithm variables coming:')
+        # log('Inverter Status:', inverter_status)
+        # log('Buffer Aggressiveness:', self._BUFFER_AGGRESSIVENESS)
+        # log('Upper Threshold:', self.UPPER_THRESHOLD)
+        # log('Lower Threshold:', self.LOWER_THRESHOLD)
+        # log('Charge Rate Increase', self._CHARGE_RATE_INCREASE)
+        # log('Charge Rate Decrease', self._CHARGE_RATE_DECREASE)
 
     def make_decision(self, modbus_data):
 
@@ -900,18 +902,18 @@ class AnalyseMethods:
             # If our purpose is to change charge mode, then change charge mode
             if purpose == "change_single_charging_mode":
                 self._CHARGING_MODE = payload['charge_mode']
-                print('change in charging mode', self._CHARGING_MODE)
+                log('change in charging mode', self._CHARGING_MODE)
 
             # If our purpose is charge status, we have a new list of dicts for charging. This only happens when a
             # charger starts or stops charging.
             # self.charger_list will be a list of dicts: [{'chargerID': MEL-DCWB, ''}]
             elif purpose == "charge_status":
-                print('We got a new charging list')
+                log('We got a new charging list')
                 self.charger_list = payload['charger_list']
 
             # If our purpose it to change the buffer aggressiveness mode, we just update the variable
             elif purpose == "buffer_aggro_change":
-                print('Buffer aggressiveness changed to', payload['buffer_aggro_mode'])
+                log('Buffer aggressiveness changed to', payload['buffer_aggro_mode'])
                 self._BUFFER_AGGRESSIVENESS = payload['buffer_aggro_mode']
 
             elif purpose == "metervalue_current":
@@ -941,7 +943,7 @@ class AnalyseMethods:
                 return charge_rate
 
         except ZeroDivisionError as error:
-            print('We have no PV, just skip. Error:', error)
+            log('We have no PV, just skip. Error:', error)
             return {
                 'available_current': 0,
                 'charge_rates': {}
