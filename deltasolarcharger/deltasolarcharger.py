@@ -328,7 +328,7 @@ class LogListenerProcess(Process):
         if not os.path.isdir("../logs"):
             os.mkdir("../logs")
 
-        h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarcharger.log", when='midnight')
+        h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarcharger.log", when='midnight', backupCount=7)
         f = logging.Formatter('%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s')
         h.setFormatter(f)
         root.addHandler(h)
