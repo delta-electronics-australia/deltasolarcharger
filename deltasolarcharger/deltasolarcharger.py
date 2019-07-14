@@ -511,7 +511,7 @@ def main():
     print(threading.enumerate())
 
     print('We are out of the program')
-
+    _log_queue.put_nowait(None)
     log_listener_process.join()
 
     exit(0)

@@ -20,6 +20,7 @@ import websocket
 
 from utils import log
 
+
 class FactoryResetNotifier(Thread):
     def __init__(self, url):
         self.url = url
@@ -997,7 +998,7 @@ class FirebaseMethods:
                     break
 
                 log('Not enough current. We are consuming:', self.latest_modbus_data['ac2c'],
-                      'but we want to charge at', target_charge_rate)
+                    'but we want to charge at', target_charge_rate)
 
             counter += 1
             log('counter is', counter)
@@ -1067,8 +1068,8 @@ class FirebaseMethods:
                     # If timestamps are different, take the timestamp of the backend
                     if self._charger_status_list[temp_chargerID]['charging_timestamp'] != temp_charging_timestamp:
                         log('There is a charging timestamp mismatch:',
-                              self._charger_status_list[temp_chargerID]['charging_timestamp'], temp_charging_timestamp,
-                              'taking charging information from the backend!')
+                            self._charger_status_list[temp_chargerID]['charging_timestamp'], temp_charging_timestamp,
+                            'taking charging information from the backend!')
                         self._charger_status_list[temp_chargerID]['charging_timestamp'] = temp_charging_timestamp
 
                         # Also take the MeterValue from the backend
@@ -1366,7 +1367,7 @@ class FirebaseMethods:
                                 datetime.strptime(temp_charging_timestamp, '%Y-%m-%dT%H:%M:%SZ'))
 
                         log('Got a metervalue message and it belongs to', temp_chargerID, 'of charging timestamp:',
-                              self._charger_status_list[temp_chargerID]['charging_timestamp'])
+                            self._charger_status_list[temp_chargerID]['charging_timestamp'])
 
                         # Initialize a list that is 11 entries long
                         temp_metervalue_entry = ["" for _ in range(11)]
@@ -1787,7 +1788,7 @@ class FirebaseMethods:
                             # If csv file name from charging history keys doesn't exist locally, then delete the key
                             if firebase_csv_name not in local_csv_list:
                                 log(charger_id, date, charging_time,
-                                      'does not exist locally, delete the Firebase key')
+                                    'does not exist locally, delete the Firebase key')
 
                                 # Remove the charging history key
                                 self.db.child("users").child(self.uid).child("charging_history_keys").child(
