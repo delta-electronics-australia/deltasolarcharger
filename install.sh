@@ -76,7 +76,7 @@ sudo systemctl unmask hostapd.service
 
 # Now start our access point and DHCP server services
 sudo service hostapd start
-sudo service isc-dhcp-server-start
+sudo service isc-dhcp-server start
 
 # Install network manager to manage our 3G connection
 apt-get install network-manager network-manager-gnome -y
