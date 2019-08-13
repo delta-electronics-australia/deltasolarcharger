@@ -96,7 +96,7 @@ sudo chmod +x /home/pi/deltasolarcharger/deltasolarcharger/start.sh
 # Make start.sh run every time the unit boots up
 mkdir ~/.config/lxsession/LXDE-pi -p
 cat >> ~/.config/lxsession/LXDE-pi/autostart << EOF
-@lxpanel -- profile LXDE-pi
+@lxpanel --profile LXDE-pi
 @pcmanfm --desktop --profile LXDE-pi
 @xscreensaver -no-splash
 point-rpi
