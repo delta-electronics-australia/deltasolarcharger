@@ -560,6 +560,10 @@ def start_config_server():
 def configure_logger():
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    
+    if not os.path.exists("../logs"):
+        os.mkdir("../logs")
+    
     h = logging.handlers.TimedRotatingFileHandler("../logs/deltasolarchargerlauncher.log", when='midnight',
                                                   backupCount=7)
     f = logging.Formatter('%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s')
